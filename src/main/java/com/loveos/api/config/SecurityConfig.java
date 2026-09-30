@@ -2,6 +2,9 @@ package com.loveos.api.config;
 
 import com.loveos.api.auth.JwtAuthenticationFilter;
 import com.loveos.api.core.RateLimitingFilter;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -187,7 +190,8 @@ public class SecurityConfig {
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(corsProperties.origins());
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "x-request-id"));
+    configuration.setAllowedHeaders(
+        List.of("Accept", "Authorization", "Content-Type", "x-request-id"));
     configuration.setExposedHeaders(List.of("x-request-id"));
     configuration.setAllowCredentials(true);
     configuration.setMaxAge(3600L);
@@ -198,5 +202,54 @@ public class SecurityConfig {
   }
 
   @ConfigurationProperties(prefix = "loveos.cors")
-  public record CorsProperties(List<String> origins) {}
+  public record CorsProperties(List<String> origins) {
+    public CorsProperties {
+      if (origins == null) {
+        throw new IllegalArgumentException("At least one CORS origin is required");
+      }
+
+      LinkedHashSet<String> normalized = new LinkedHashSet<>();
+      origins.stream()
+          .filter(value -> value != null)
+          .flatMap(value -> Arrays.stream(value.split(",")))
+          .map(String::trim)
+          .filter(value -> !value.isEmpty())
+          .map(CorsProperties::validatedOrigin)
+          .forEach(normalized::add);
+
+      if (normalized.isEmpty()) {
+        throw new IllegalArgumentException("At least one CORS origin is required");
+      }
+      origins = List.copyOf(normalized);
+    }
+
+    private static String validatedOrigin(String value) {
+      if (value.contains("*")) {
+        throw new IllegalArgumentException("CORS origins must not contain wildcards");
+      }
+      try {
+        URI uri = URI.create(value);
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        boolean localHttp = "http".equalsIgnoreCase(scheme)
+            && ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host));
+        boolean validScheme = "https".equalsIgnoreCase(scheme) || localHttp;
+        boolean exactOrigin = uri.getUserInfo() == null
+          && (uri.getRawPath() == null || uri.getRawPath().isEmpty())
+            && uri.getRawQuery() == null
+            && uri.getRawFragment() == null;
+        if (!validScheme || host == null || !exactOrigin) {
+          throw new IllegalArgumentException(
+              "CORS origin must be an exact HTTPS origin (HTTP is allowed only for localhost): "
+                  + value);
+        }
+        return value;
+      } catch (IllegalArgumentException exception) {
+        if (exception.getMessage() != null && exception.getMessage().startsWith("CORS origin")) {
+          throw exception;
+        }
+        throw new IllegalArgumentException("Invalid CORS origin: " + value, exception);
+      }
+    }
+  }
 }
