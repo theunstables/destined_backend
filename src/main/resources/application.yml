@@ -1,0 +1,228 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  LoveOS API — base configuration
+#
+#  NOTHING SECRET IS COMMITTED HERE. Every sensitive value is an environment
+#  placeholder, and the ones that must not have a default (the JWT secret, the
+#  database password) are written WITHOUT a fallback on purpose: `${JWT_SECRET}`
+#  with no default fails at startup if it is unset. A baked-in default would
+#  quietly ship to production and sign tokens anyone reading this file could
+#  forge. A refusal to boot is the correct behaviour.
+#
+#  The two development profiles at the bottom (`pgdev`, `postgres`) both talk to
+#  a real PostgreSQL server. There is no in-memory fallback anywhere in this file
+#  and no H2 driver on the classpath, so "it saved but I cannot find the row" is
+#  not a failure this application can produce.
+# ─────────────────────────────────────────────────────────────────────────────
+server:
+  port: ${PORT:4000}
+  shutdown: graceful
+  # Do not advertise the server product in responses. Minor, but free.
+  server-header:
+  error:
+    # Suppress Spring's default error body entirely; GlobalExceptionHandler owns
+    # every error response, and a stack trace on the wire is an information leak.
+    include-stacktrace: never
+    include-message: never
+  # Honour X-Forwarded-* when behind a load balancer, so the IP recorded against
+  # a session is the client's rather than the proxy's. Safe only because the
+  # proxy is trusted to overwrite these headers.
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: loveos-api
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/loveos}
+    username: ${DATABASE_USER:loveos}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      # Deliberately small. A connection pool larger than the database's own
+      # limit turns a traffic spike into connection-refused errors rather than
+      # queueing, and Postgres handles far fewer concurrent connections well
+      # than people expect.
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      connection-timeout: 10000
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # False by default. An existing pre-Flyway database may opt in once to
+    # record V1 as its baseline; an empty database always executes V1 normally.
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+    baseline-version: 1
+    validate-migration-naming: true
+
+  jpa:
+    open-in-view: false
+    # ^ Off. Spring's default leaves a transaction open for the whole request so
+    #   lazy collections resolve inside a template. There are no templates here,
+    #   and holding a connection through JSON serialisation is how a pool gets
+    #   exhausted under load. Anything lazy must be fetched inside the service.
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+      # ^ `validate` in every real environment: Hibernate checks the schema
+      #   matches the entities and refuses to start if not. It never alters the
+      #   database. `update` is convenient and dangerous — it silently drops
+      #   nothing, adds inconsistently, and cannot express a data migration.
+      #   Schema changes belong in immutable Flyway files under db/migration.
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        # Batch writes; harmless here, valuable once the chat module lands.
+        order_inserts: true
+        order_updates: true
+
+  jackson:
+    # ISO-8601 strings, not epoch numbers — the client parses `2026-09-07T…Z`.
+    #
+    # Spring Boot 4 ships JACKSON 3, where this toggle lives on `DateTimeFeature`
+    # rather than `SerializationFeature`. Putting it under `serialization:` binds
+    # against the wrong enum and the application refuses to start.
+    datetime:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_TLS:false}
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
+
+  threads:
+    virtual:
+      # Java 21 virtual threads. Request handling here is mostly waiting on the
+      # database, which is exactly the workload these were built for.
+      enabled: true
+
+# ── Application settings — bound to AppProperties, validated at startup ───────
+loveos:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:loveos-api}
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+  tokens:
+    email-verification-ttl: 24h
+    password-reset-ttl: 30m
+    opaque-token-bytes: 32
+  mail:
+    from: ${MAIL_FROM:LoveOS <no-reply@loveos.app>}
+    driver: ${MAIL_DRIVER:console}
+  media:
+    driver: ${MEDIA_DRIVER:local}
+    local-dir: ${MEDIA_LOCAL_DIR:${user.home}/.loveos/media}
+    max-bytes: ${MEDIA_MAX_BYTES:26214400}
+    s3:
+      bucket: ${MEDIA_S3_BUCKET:}
+      region: ${MEDIA_S3_REGION:us-east-1}
+      endpoint: ${MEDIA_S3_ENDPOINT:}
+      public-base-url: ${MEDIA_S3_PUBLIC_BASE_URL:}
+  public-api-url: ${PUBLIC_API_URL:http://localhost:4000}
+  cors:
+    # An allow-list, never a wildcard. Expo's dev server and the web build.
+    origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006}
+
+logging:
+  level:
+    root: INFO
+    com.loveos.api: ${LOG_LEVEL:INFO}
+  pattern:
+    # requestId is put into the MDC by RequestIdFilter, so every line of a
+    # failing request can be pulled up from the id the client was shown.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-—}] %logger{36} - %msg%n"
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+#  postgres — a real database on this machine, so data survives a restart.
+#
+#      -Dspring.profiles.active=postgres
+#
+#  Requires DATABASE_PASSWORD in the environment. That is the one value nobody
+#  but you knows, and it is the one value that must never be written down here.
+#
+#  Flyway applies pending migrations before Hibernate validates the schema.
+#
+#  This is still a DEVELOPMENT profile — it assumes localhost and carries a
+#  published JWT secret. A deployment uses no profile at all and supplies every
+#  value through the environment.
+# ─────────────────────────────────────────────────────────────────────────────
+spring:
+  config:
+    activate:
+      on-profile: postgres
+
+  flyway:
+    # The external development database may predate Flyway, just like pgdev.
+    # After the baseline row exists this setting has no further effect.
+    baseline-on-migrate: true
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/loveos}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # VALIDATE, NOT UPDATE. Hibernate checks that the tables match the entities
+      # and refuses to start if they do not — it never alters the database.
+      # `update` would quietly paper over a mismatch by adding a column, leaving
+      # the schema file and the real schema disagreeing with nobody the wiser.
+      # A startup failure naming the offending column is the more useful outcome.
+      ddl-auto: validate
+
+loveos:
+  jwt:
+    secret: local-development-only-secret-not-for-any-real-use
+  mail:
+    driver: console
+
+---
+# ─────────────────────────────────────────────────────────────────────────────
+#  pgdev — real PostgreSQL, started by the application, owned by you.
+#
+#      -Dspring.profiles.active=pgdev
+#
+#  No Windows service, no administrator rights, no password to recover: the
+#  server runs as a child process of this JVM on port 5433, and its data lives
+#  under %LOCALAPPDATA%\loveos\pgdata so it survives restarts.
+#
+#  EmbeddedPostgresConfig owns the DataSource for this profile. Switch to
+#  `postgres` once a real server and credentials exist; nothing else changes,
+#  because the application cannot tell the difference.
+# ─────────────────────────────────────────────────────────────────────────────
+spring:
+  config:
+    activate:
+      on-profile: pgdev
+
+  flyway:
+    # Preserve databases created before Flyway was introduced. New empty pgdev
+    # databases execute V1; existing ones receive a version-1 baseline marker.
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      # A genuine check here, not a tautology: the schema comes from a file, so
+      # Hibernate is comparing the entities against something it did not write.
+      ddl-auto: validate
+
+loveos:
+  jwt:
+    secret: local-development-only-secret-not-for-any-real-use
+  mail:
+    driver: console

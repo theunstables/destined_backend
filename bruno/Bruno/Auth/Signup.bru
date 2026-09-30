@@ -1,0 +1,36 @@
+meta {
+  name: Signup
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/signup
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+vars:pre-request {
+  email: eswar.benarjee.naidu.polamarasetty@adp.com
+  password: Ziyu1234
+}
+
+assert {
+  res.status: eq 201
+  res.body.data.user.emailVerified: eq false
+}
+
+script:post-response {
+  // Only capture on success, so a 409 on a re-run does not wipe good tokens.
+  if (res.status === 201) {
+    bru.setEnvVar("accessToken", res.body.data.accessToken);
+    bru.setEnvVar("refreshToken", res.body.data.refreshToken);
+  }
+}

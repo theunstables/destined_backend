@@ -1,0 +1,34 @@
+meta {
+  name: Refresh
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+script:pre-request {
+  // Keep the token being sent, so the Replay request below can present the
+  // one this call is about to invalidate.
+  bru.setEnvVar("previousRefreshToken", bru.getEnvVar("refreshToken"));
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("accessToken", res.body.data.accessToken);
+    bru.setEnvVar("refreshToken", res.body.data.refreshToken);
+  }
+}
+
+assert {
+  res.status: eq 200
+}

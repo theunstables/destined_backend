@@ -1,0 +1,31 @@
+meta {
+  name: Gated route - unverified
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{ziyuBaseUrl}}/v1/pairing/status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+docs {
+  Two things at once.
+
+  Before verifying: 403 EMAIL_NOT_VERIFIED — the app has a screen for exactly
+  this state and needs to know to show it.
+
+  After verifying: still 403, because pairing is not ported yet. That is the
+  deny-by-default rule working. The chain ends with
+  `anyRequest().hasAuthority(ROLE_VERIFIED)`, so an unimplemented route is a
+  locked door rather than an open one.
+}
+
+assert {
+  res.status: eq 403
+}

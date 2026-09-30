@@ -1,0 +1,31 @@
+meta {
+  name: Signup - validation
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/signup
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "not-an-email",
+    "password": "short"
+  }
+}
+
+docs {
+  422 with a per-field `issues` array, which is what the client renders inline
+  next to each input.
+
+  Also try adding "emailVerified": true to this body — it is silently ignored,
+  because the request record has nowhere for that value to land.
+}
+
+assert {
+  res.status: eq 422
+  res.body.error.code: eq VALIDATION_ERROR
+}

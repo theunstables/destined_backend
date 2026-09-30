@@ -1,0 +1,29 @@
+meta {
+  name: Verify Email
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{ziyuBaseUrl}}/v1/auth/verify-email?token={{verifyToken}}
+  body: none
+  auth: none
+}
+
+params:query {
+  token: {{verifyToken}}
+}
+
+docs {
+  Set `verifyToken` from the console-mailer output in the application log:
+
+      http://localhost:4000/v1/auth/verify-email?token=uAv7iru…
+
+  Note that your existing access token still says emailVerified:false until it
+  is refreshed — that is inherent to stateless tokens, at most 15 minutes.
+}
+
+assert {
+  res.status: eq 200
+  res.body.data.user.emailVerified: eq true
+}

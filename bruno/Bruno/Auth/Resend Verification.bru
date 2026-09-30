@@ -1,0 +1,21 @@
+meta {
+  name: Resend Verification
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/verify-email/resend
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}"
+  }
+}
+
+docs {
+  202 while unverified. 409 EMAIL_ALREADY_VERIFIED once verified.
+}

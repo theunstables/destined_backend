@@ -1,0 +1,27 @@
+meta {
+  name: Logout
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/logout
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+docs {
+  204, always — even for a token that was already dead. Logout is the one
+  operation that must never fail, because the client discards its session the
+  moment it calls this.
+}
+
+assert {
+  res.status: eq 204
+}

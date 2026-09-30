@@ -1,0 +1,30 @@
+meta {
+  name: Refresh Replay (reuse detection)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{previousRefreshToken}}"
+  }
+}
+
+docs {
+  Presents the token that Refresh just rotated away.
+
+  Expect 401 TOKEN_INVALID — and note that this also revokes EVERY session for
+  the user, because two parties holding one token means one of them stole it and
+  nothing here can tell which. Run Login again afterwards.
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq TOKEN_INVALID
+}

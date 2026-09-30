@@ -1,0 +1,23 @@
+meta {
+  name: Login - unknown account
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "nobody@example.com",
+    "password": "definitely-not-it-9"
+  }
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq INVALID_CREDENTIALS
+}

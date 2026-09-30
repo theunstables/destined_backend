@@ -1,0 +1,23 @@
+meta {
+  name: Signup - duplicate
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{ziyuBaseUrl}}/v1/auth/signup
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq EMAIL_ALREADY_EXISTS
+}

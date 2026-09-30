@@ -1,0 +1,16 @@
+meta {
+  name: Me - no token
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{ziyuBaseUrl}}/v1/auth/me
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq UNAUTHORIZED
+}

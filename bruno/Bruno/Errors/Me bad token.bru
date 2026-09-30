@@ -1,0 +1,26 @@
+meta {
+  name: Me - bad token
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{ziyuBaseUrl}}/v1/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer not-a-real-token
+}
+
+docs {
+  TOKEN_INVALID rather than UNAUTHORIZED. The distinction matters: the client
+  refreshes on TOKEN_EXPIRED and signs out on TOKEN_INVALID, so collapsing them
+  would break the silent-refresh path.
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq TOKEN_INVALID
+}
