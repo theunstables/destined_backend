@@ -135,7 +135,7 @@ loveos:
   public-app-url: ${PUBLIC_APP_URL:talesoftwo://}
   cors:
     # An allow-list, never a wildcard. Expo's dev server and the web build.
-    origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006}
+    origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006,https://www.talesoftwo.world,https://destinedfrontend-xi.vercel.app}
 
 logging:
   level:

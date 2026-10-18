@@ -51,6 +51,7 @@ class SecurityCorsConfigurationTest {
   @Test
   void allowsConfiguredBrowserPreflightsAndRejectsUnknownOrigins() throws Exception {
     List<String> allowed = List.of(
+        "https://www.talesoftwo.world",
         "https://destinedfrontend-xi.vercel.app",
         "https://destinedfrontend-git-main-theunstables.vercel.app",
         "https://destinedfrontend-qjrn01827-theunstables.vercel.app");
