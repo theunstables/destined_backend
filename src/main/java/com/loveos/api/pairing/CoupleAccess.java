@@ -1,7 +1,8 @@
 package com.loveos.api.pairing;
 
-import java.util.UUID;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /** Stable application boundary through which other features obtain couple scope. */
 public interface CoupleAccess {
@@ -33,7 +34,11 @@ public interface CoupleAccess {
     }
   }
 
-  record Member(UUID userId, Role role, String displayName, String nickname) {}
+  record Member(UUID userId, Role role, String displayName, String nickname, LocalDate birthday) {
+    public Member(UUID userId, Role role, String displayName, String nickname) {
+      this(userId, role, displayName, nickname, null);
+    }
+  }
 
   record Space(String name, String shortName, String coverStyle) {}
 }

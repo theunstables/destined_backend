@@ -1,6 +1,6 @@
 # LoveOS Spring Boot Progress Tracker
 
-Last updated: 2026-09-18
+Last updated: 2026-10-18
 
 Update this file when work starts or finishes. Keep evidence links or commands in the Notes column rather than marking work complete based only on code existence.
 
@@ -18,6 +18,7 @@ Update this file when work starts or finishes. Keep evidence links or commands i
 | Phase 7 — Daily connection | 🔄 Verification | 5/5 | Implementation and 145-test backend suite pass; content/visual/package/device gates remain |
 | Phase 8 — Repair signal | 🔄 Verification | 5/5 | Implementation and 155-test backend suite pass; safety/visual/package/device gates remain |
 | Phase 9 — Reciprocal Memory notes | 🔄 Verification | 5/5 | Implementation and 162-test backend suite pass; product/safety/visual/package/device gates remain |
+| Phase 10 — Plans and remaining screens | 🔄 Verification | 6/6 | Implementation and 168-test backend suite pass through Flyway V13; frontend/native device gates remain |
 
 ## Completed baseline
 
@@ -363,7 +364,7 @@ Update this file when work starts or finishes. Keep evidence links or commands i
 
 ## Current next action
 
-Route guards and worldwide `DateUtils` are implemented. Lifecycle defaults, the 5–8-couple safety pilot, deep links, Google/Apple OAuth, Expo Push, and all deferred environment/manual gates remain pending detailed discussion or verification.
+Route guards, worldwide `DateUtils`, and allow-listed native/HTTPS deep-link routing are implemented. The complete 168-test backend suite passes, including Flyway V1–V13 against PostgreSQL 16.2. Lifecycle defaults, the 5–8-couple safety pilot, Google/Apple OAuth, Expo Push delivery, native-link device checks, two-device realtime checks, and other deferred environment/manual gates remain pending.
 
 ## Change log
 
@@ -393,3 +394,8 @@ Route guards and worldwide `DateUtils` are implemented. Lifecycle defaults, the 
 | 2026-09-18 | Completed Phase 9 implementation: Flyway V10, private-until-reciprocal Memory notes, idempotent replacement, withdrawal/re-mask, privacy-scoped export, frontend non-visual integration, and 162 passing backend tests. |
 | 2026-09-18 | Implemented `LOV-005` route guards: token/principal/pairing bootstrap, auth/onboarding/app layout enforcement, offline retry, session-state cleanup, and route-policy tests. Recorded the safety pilot, worldwide DateUtils, lifecycle decisions, deep links, OAuth, Expo Push, and deferred environment/manual gates as planned work. |
 | 2026-09-18 | Implemented canonical Java/TypeScript `DateUtils`, migrated date-policy-sensitive boundaries, aligned leap-day recurrence, added IANA/DST/date-line/strict-parsing coverage, and passed the complete 170-test editor suite. Other planned workstreams remain pending discussion. |
+| 2026-10-13 | Implemented Flyway V11 Plans/preferences/memory attachments, couple Plans JSONB persistence, sealed-letter masking, deterministic planner, user preferences, and frontend providers/hydration. Full Maven suite passed before the next domain increment. |
+| 2026-10-13 | Implemented Flyway V12 ephemeral current-location sharing and the Watch Together WebSocket protocol. All 151 backend tests pass against the complete migration chain, and the deployable JAR contains V12 plus the Shared Places and realtime classes. Frontend diagnostics are clean; executable frontend checks and native `expo-location` remain blocked by the incomplete/offline npm installation. |
+| 2026-10-13 | Added the unverified V13 increment: media inventory/storage usage, durable feedback, Watch room/history/keepsakes, capsule opening enforcement, allow-listed deep links, call lifecycle signaling, billing entitlements, profile-backed compatibility, media transfer policy, and deterministic adaptive suggestions. Focused pre-OOM tests passed for Media/Plans; complete V13 verification remains pending and no npm installation was attempted. |
+| 2026-10-18 | Code-only V13 hardening: new endpoints now consume the signed `AuthenticatedUser` principal, all provider-independent controllers have source-level contract coverage, realtime allow-lists have negative tests, native intent routing covers the implemented app destinations and HTTPS links, and Watch writes merge against current persisted state with a durable keepsake Memory ID. Editor diagnostics are clean; tests, Flyway V13, native links, and two-device realtime remain unexecuted after the reported OOM, and no npm installation was attempted. |
+| 2026-10-18 | Verified V13 end to end after removing an unnecessary strict Mockito stub from the early capsule-rejection test. `mvn test` passed all 168 tests with 0 failures, 0 errors, and 0 skipped. Embedded PostgreSQL 16.2 started from an empty schema; Flyway validated and applied all 13 migrations and reported schema version V13 before Hibernate validation. The deployable 78,609,138-byte Spring Boot JAR then packaged successfully with Java 21, all 13 migrations, the correct `LoveOsApplication` start class, and no embedded-PostgreSQL test dependency. No npm command or installation was run. |

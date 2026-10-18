@@ -6,6 +6,7 @@ import com.loveos.api.pairing.CoupleAccess;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -15,21 +16,24 @@ public class MediaService {
   private final CoupleAccess coupleAccess;
   private final StorageProvider storage;
   private final MediaProperties properties;
+  private final MediaObjectRepository objects;
   private final String publicApiUrl;
 
   public MediaService(
       CoupleAccess coupleAccess,
       StorageProvider storage,
       MediaProperties properties,
+      MediaObjectRepository objects,
       com.loveos.api.config.AppProperties appProperties) {
     this.coupleAccess = coupleAccess;
     this.storage = storage;
     this.properties = properties;
+    this.objects = objects;
     this.publicApiUrl = appProperties.publicApiUrl().replaceAll("/+$", "");
   }
 
   public UploadedMedia upload(UUID userId, UploadInput file) {
-    coupleAccess.requireMembership(userId);
+    UUID coupleId = coupleAccess.requireMembershipForUpdate(userId).coupleId();
     if (file.bytes() == 0) throw new AppException(ErrorCode.INVALID_REQUEST, "No file uploaded");
     if (file.bytes() > properties.maxBytes()) {
       throw new AppException(ErrorCode.PAYLOAD_TOO_LARGE,
@@ -44,7 +48,17 @@ public class MediaService {
       String key = UUID.randomUUID() + MediaTypePolicy.extension(contentType, header);
       storage.store(key, input, file.bytes(), contentType);
       String fallback = publicApiUrl + "/media/" + key;
-      return new UploadedMedia(storage.publicUrl(key, fallback), contentType, file.bytes());
+      String publicUrl = storage.publicUrl(key, fallback);
+      MediaObject object = new MediaObject();
+      object.setObjectKey(key);
+      object.setCoupleId(coupleId);
+      object.setUploadedBy(userId);
+      object.setPublicUrl(publicUrl);
+      object.setContentType(contentType);
+      object.setBytes(file.bytes());
+      object.setCreatedAt(Instant.now());
+      objects.save(object);
+      return new UploadedMedia(publicUrl, contentType, file.bytes());
     } catch (IOException exception) {
       throw new AppException(ErrorCode.INTERNAL_ERROR, "Media could not be stored");
     }

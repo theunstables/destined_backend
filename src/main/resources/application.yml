@@ -132,6 +132,7 @@ loveos:
       endpoint: ${MEDIA_S3_ENDPOINT:}
       public-base-url: ${MEDIA_S3_PUBLIC_BASE_URL:}
   public-api-url: ${PUBLIC_API_URL:http://localhost:4000}
+  public-app-url: ${PUBLIC_APP_URL:talesoftwo://}
   cors:
     # An allow-list, never a wildcard. Expo's dev server and the web build.
     origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006}

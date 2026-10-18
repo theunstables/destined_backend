@@ -69,6 +69,7 @@ class JwtServiceTest {
         new AppProperties.Jwt(SECRET, issuer, accessTtl, Duration.ofDays(30)),
         new AppProperties.Tokens(Duration.ofHours(24), Duration.ofMinutes(30), 32),
         new AppProperties.Mail("LoveOS <test@loveos.invalid>", "console"),
-        "http://localhost:4000"));
+        "http://localhost:4000",
+        "talesoftwo://"));
   }
 }

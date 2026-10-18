@@ -61,7 +61,8 @@ class HomePostgresIntegrationTest {
         new StoryRequests.KeyDates(null, null, null, null, null)));
     memories.create(alex.getId(), new MemoryRequests.CreateMemory(
         "Rome", "2024-06-12", null, "Rome", null,
-        "https://example.test/rome.jpg", null, List.of("Trips"), false, null));
+      "https://example.test/rome.jpg", null, null, null,
+      null, List.of("Trips"), false, null));
     calendar.create(alex.getId(), new CalendarRequests.CreateEvent(
         "Date night", LocalDate.now(java.time.ZoneOffset.UTC).plusDays(3).toString(),
         null, null, null, null, "dateNight", false, null));

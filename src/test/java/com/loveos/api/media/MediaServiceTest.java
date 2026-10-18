@@ -18,23 +18,30 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class MediaServiceTest {
 
   private CoupleAccess couples;
   private InMemoryStorage storage;
   private MediaService service;
+  private MediaObjectRepository objects;
   private UUID userId;
+  private UUID coupleId;
 
   @BeforeEach
   void setUp() {
     couples = org.mockito.Mockito.mock(CoupleAccess.class);
     storage = new InMemoryStorage();
+    objects = org.mockito.Mockito.mock(MediaObjectRepository.class);
+    userId = UUID.randomUUID();
+    coupleId = UUID.randomUUID();
+    when(couples.requireMembershipForUpdate(userId)).thenReturn(
+      new CoupleAccess.Membership(coupleId, CoupleAccess.Role.FOUNDER, true));
     AppProperties app = org.mockito.Mockito.mock(AppProperties.class);
     when(app.publicApiUrl()).thenReturn("https://api.example.test/");
     service = new MediaService(couples, storage,
-        new MediaProperties("local", Path.of("unused"), 25 * 1024 * 1024), app);
-    userId = UUID.randomUUID();
+      new MediaProperties("local", Path.of("unused"), 25 * 1024 * 1024), objects, app);
   }
 
   @Test
@@ -44,10 +51,15 @@ class MediaServiceTest {
     var result = service.upload(userId,
         new MediaService.UploadInput(new ByteArrayInputStream(jpeg), "image/jpeg", jpeg.length));
 
-    verify(couples).requireMembership(userId);
+    verify(couples).requireMembershipForUpdate(userId);
     assertThat(result.url()).matches("https://api\\.example\\.test/media/[0-9a-f-]{36}\\.jpg");
     assertThat(result.contentType()).isEqualTo("image/jpeg");
     assertThat(storage.bytes).containsExactly(jpeg);
+    ArgumentCaptor<MediaObject> saved = ArgumentCaptor.forClass(MediaObject.class);
+    verify(objects).save(saved.capture());
+    assertThat(saved.getValue().getCoupleId()).isEqualTo(coupleId);
+    assertThat(saved.getValue().getUploadedBy()).isEqualTo(userId);
+    assertThat(saved.getValue().getBytes()).isEqualTo(jpeg.length);
   }
 
   @Test
@@ -73,7 +85,7 @@ class MediaServiceTest {
     AppProperties app = org.mockito.Mockito.mock(AppProperties.class);
     when(app.publicApiUrl()).thenReturn("https://api.example.test");
     return new MediaService(couples, storage,
-        new MediaProperties("local", Path.of("unused"), maximum), app);
+      new MediaProperties("local", Path.of("unused"), maximum), objects, app);
   }
 
   private static final class InMemoryStorage implements StorageProvider {

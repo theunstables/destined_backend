@@ -101,7 +101,8 @@ class MemoriesControllerContractTest {
 
   private MemoryResponses.MemoryDto memory() {
     return new MemoryResponses.MemoryDto(memoryId.toString(), "Rome", "2024-06-12", "A day",
-        null, "https://example.test/one.jpg", List.of("https://example.test/one.jpg"),
+      null, "https://example.test/one.jpg", null, null, null,
+      List.of("https://example.test/one.jpg"),
         null, List.of("Trips"), false, "Alex", "2026-09-18T00:00:00Z",
         "2026-09-18T00:00:00Z", null, null, false);
   }

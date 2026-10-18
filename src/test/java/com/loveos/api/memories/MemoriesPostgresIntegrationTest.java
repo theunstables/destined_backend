@@ -214,7 +214,7 @@ class MemoriesPostgresIntegrationTest {
       String title, String date, String cover, List<String> photos, List<String> tags,
       List<String> albumIds) {
     return new MemoryRequests.CreateMemory(title, date, null, "Rome", "Our note", cover,
-        photos, tags, false, albumIds);
+      null, null, null, photos, tags, false, albumIds);
   }
 
   private User user(String email, String name, String nickname) {

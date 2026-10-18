@@ -1,6 +1,6 @@
 # LoveOS Feature Register
 
-Last updated: 2026-09-18
+Last updated: 2026-10-13
 
 This is the product and backend feature inventory for the Spring Boot implementation. The Node backend is retired and is not an implementation target or runtime dependency.
 
@@ -18,7 +18,7 @@ This is the product and backend feature inventory for the Spring Boot implementa
 | Platform | Success/error envelopes, request IDs, validation and exception handling | ✅ | ✅ | Shared foundation |
 | Platform | PostgreSQL configuration and persistent local PostgreSQL development profile | ✅ | N/A | PostgreSQL is the only database |
 | Platform | Automated tests and build gates | ✅ | ✅ | Complete workspace runner passes; Phase 5 Maven package rerun pending PATH repair |
-| Platform | Flyway migrations | ✅ | N/A | V1–V10; Hibernate validates after migration |
+| Platform | Flyway migrations | ✅ | N/A | V1–V13; latest migration verification pending |
 | Platform | Rate limiting | ✅ | N/A | In-memory single-instance limiter; replace with shared limiter when scaling out |
 | Platform | Separate liveness/readiness and observability | ✅ | N/A | PostgreSQL readiness, graceful shutdown and request completion logs |
 | Auth | Signup, login, refresh and logout | ✅ | Adapter ready | End-to-end backend verified |
@@ -35,6 +35,7 @@ This is the product and backend feature inventory for the Spring Boot implementa
 | Story | Moments and date precision | ✅ | ✅ | Met, first date, became us, first memory |
 | Story | Important dates | ✅ | ✅ | Role-relative birthdays; feeds Calendar and Home |
 | Media | Image/audio/video upload | ✅ | ✅ | Atomic local and S3-compatible production providers |
+| Media | Upload inventory and storage usage | ✅ | ✅ | V13 inventory; pre-V13 objects need backfill |
 | Memories | List/get/create/favorite/search | ✅ | ✅ | Couple-scoped authorization and startup hydration |
 | Memories | Update and soft delete | ✅ | Existing inactive controls unchanged | Backend contract complete |
 | Memories | Ordered photos, tags and albums | ✅ | Adapter-ready | Starter albums created after pairing |
@@ -48,14 +49,25 @@ This is the product and backend feature inventory for the Spring Boot implementa
 | Chat | Delivery and read receipts | ✅ | ✅ | Bulk read acknowledgement and per-viewer status |
 | Realtime | Authenticated WebSocket and heartbeat | ✅ | ✅ | Colocated with Chat initially |
 | Realtime | Typing, presence and message/status/update events | ✅ | ✅ | Redis/pub-sub required only for multiple instances |
+| Realtime | Watch Together presence, playback, reactions and whispers | ✅ | ✅ | Couple-scoped relay; physical drift test remains |
+| Realtime | Voice/video call lifecycle signaling | ✅ | ✅ | Couple-scoped signaling; WebRTC media provider still required |
+| Plans | Couple workspace and sealed letters | ✅ | ✅ | Versioned JSONB; canonical identities; sealed bodies masked |
+| Plans | Deterministic trip planner | ✅ | ✅ | Five-destination catalogue; no external AI dependency |
+| Plans | Expiring Shared Places current fix | ✅ | Web ✅ / native blocked | No history; native awaits `expo-location` package availability |
+| Plans | Watch room, queue, whispers, history and keepsake | ✅ | ✅ | Room state in couple Plans JSON; realtime events remain ephemeral until persisted by client |
+| Plans | Time capsule detail and due-date opening | ✅ | ✅ | Server rejects opening before `opensAt` |
+| Preferences | Privacy and chat-behaviour settings | ✅ | ✅ | User-scoped allow-listed JSONB document |
 | Profile | Export, pause/reactivate, unpair grace and account deletion | ✅ | Adapter/store ready | Account tombstoning preserves couple-owned history |
 | Notifications | Preferences, quiet hours and device registration | ✅ | Adapter/store ready | Provider-independent state only |
-| Notifications | Push delivery and deep links | ⏸ | Not configured | Requires Expo/FCM/APNs credentials and URL policy |
+| Notifications | Deep-link route policy | N/A | ✅ | Allow-listed auth, pairing, chat, home, Memory, letter and capsule routes |
+| Notifications | Push delivery | ⏸ | Not configured | Requires Expo/FCM/APNs credentials |
 | Timeline | Story, Memories and Calendar projection | ✅ | Adapter/store ready | Read-only; owns no persistence or visual route yet |
 | Connection | Daily Question assignment and reciprocity gate | ✅ | Adapter/store ready | Static catalogue; partner answer hidden until both answer |
 | Connection | Completed questions become Memories | ✅ | Hydrated through existing Memories | Exactly one tagged Memory per completed daily exchange |
 | Connection | Repair Signal | ✅ | Adapter/store ready | One quiet 24-hour signal; symmetric mutual readiness; sender cancellation; no read telemetry |
-| AI | Adaptive/generated questions and drafted notes | ⏸ | Placeholder cards exist | Privacy, retention, moderation and cost policy required |
+| Content | Deterministic adaptive suggestions | ✅ | ✅ | Curated couple/day rotation; no external AI data transfer |
+| Billing | Server-authoritative entitlement summary | ✅ | ✅ | Free plan active; checkout unavailable until provider configuration |
+| Feedback | Durable authenticated submissions | ✅ | ✅ | V13 persistence; no external support-desk delivery yet |
 | Security | End-to-end encryption | ⏸ | N/A | Requires a separate product/security architecture |
 
 ## Dependency order

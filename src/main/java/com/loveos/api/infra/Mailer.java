@@ -41,7 +41,7 @@ public class Mailer {
   }
 
   public void sendVerification(String to, String token) {
-    String link = properties.publicApiUrl() + "/v1/auth/verify-email?token=" + token;
+    String link = appLink("verify-email", token);
     send(to, "Confirm your email", """
         Welcome to LoveOS.
 
@@ -54,7 +54,7 @@ public class Mailer {
   }
 
   public void sendPasswordReset(String to, String token) {
-    String link = properties.publicApiUrl() + "/reset-password?token=" + token;
+    String link = passwordResetLink(token);
     send(to, "Reset your password", """
         Someone asked to reset the password for this account.
 
@@ -63,6 +63,18 @@ public class Mailer {
         This link expires in 30 minutes and can be used once. If it wasn't you,
         nothing has changed and you can ignore this message.
         """.formatted(link));
+  }
+
+  String passwordResetLink(String token) {
+    return appLink("reset-password", token);
+  }
+
+  private String appLink(String route, String token) {
+    String base = properties.publicAppUrl();
+    if (base.endsWith("://")) {
+      return base + route + "?token=" + token;
+    }
+    return base.replaceAll("/+$", "") + "/" + route + "?token=" + token;
   }
 
   private void send(String to, String subject, String body) {

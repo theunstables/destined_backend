@@ -35,8 +35,8 @@ class AuthPostgresIntegrationTest {
     String email = "integration-" + UUID.randomUUID() + "@loveos.test";
     var device = new AuthService.DeviceContext("integration-test", "test-ip-hash");
 
-    var signup = authService.signUp(new AuthRequests.SignUp(email, "Password1"), device);
-    var login = authService.login(new AuthRequests.Login(email, "Password1"), device);
+    var signup = authService.signUp(new AuthRequests.SignUp(email, "Password1!"), device);
+    var login = authService.login(new AuthRequests.Login(email, "Password1!"), device);
 
     assertThat(signup.user().userId()).isEqualTo(login.user().userId());
     assertThat(users.findByEmail(email)).isPresent();

@@ -131,11 +131,11 @@ public class MemoriesService implements MemoriesAccess {
       UUID userId, UUID memoryId, String date, String prompt, String note) {
     if (memoryId == null) {
       return UUID.fromString(create(userId, new MemoryRequests.CreateMemory(
-          "Daily question", date, prompt, null, note, null, List.of(),
+          "Daily question", date, prompt, null, note, null, null, null, null, List.of(),
           List.of("Daily Questions"), false, List.of())).id());
     }
     update(userId, memoryId, new MemoryRequests.UpdateMemory(
-        "Daily question", null, prompt, null, note, null, null, null, null));
+      "Daily question", null, prompt, null, note, null, null, null, null, null, null, null));
     return memoryId;
   }
 
@@ -150,6 +150,7 @@ public class MemoriesService implements MemoriesAccess {
     memory.setCaption(optional(input.caption()));
     memory.setLocation(optional(input.location()));
     memory.setNote(optional(input.note()));
+    setAttachments(memory, input.videoUri(), input.voiceUri(), input.voiceDurationMs());
     memory.setFavorite(Boolean.TRUE.equals(input.favorite()));
     memories.saveAndFlush(memory);
     replacePhotos(memory.getId(), input.photoUri(), input.photos());
@@ -168,6 +169,10 @@ public class MemoriesService implements MemoriesAccess {
     if (input.caption() != null) memory.setCaption(optional(input.caption()));
     if (input.location() != null) memory.setLocation(optional(input.location()));
     if (input.note() != null) memory.setNote(optional(input.note()));
+    if (input.videoUri() != null) memory.setVideoUri(optional(input.videoUri()));
+    if (input.voiceUri() != null || input.voiceDurationMs() != null) {
+      setVoiceAttachment(memory, input.voiceUri(), input.voiceDurationMs());
+    }
     if (input.favorite() != null) memory.setFavorite(input.favorite());
     if (input.photoUri() != null || input.photos() != null) {
       replacePhotos(id, input.photoUri(), input.photos());
@@ -359,10 +364,29 @@ public class MemoriesService implements MemoriesAccess {
     boolean revealed = mine != null && partner != null;
     return new MemoryResponses.MemoryDto(
         memory.getId().toString(), memory.getTitle(), memory.getDate().toString(),
-        memory.getCaption(), memory.getLocation(), urls.isEmpty() ? null : urls.getFirst(), urls,
+      memory.getCaption(), memory.getLocation(), urls.isEmpty() ? null : urls.getFirst(),
+      memory.getVideoUri(), memory.getVoiceUri(), memory.getVoiceDurationMs(), urls,
         memory.getNote(), tagLabels(memory.getId()), memory.isFavorite(), authorName,
       memory.getCreatedAt().toString(), memory.getUpdatedAt().toString(),
       mine == null ? null : mine.getNote(), revealed ? partner.getNote() : null, revealed);
+  }
+
+  private static void setAttachments(
+      Memory memory, String videoUri, String voiceUri, Integer voiceDurationMs) {
+    memory.setVideoUri(optional(videoUri));
+    setVoiceAttachment(memory, voiceUri, voiceDurationMs);
+  }
+
+  private static void setVoiceAttachment(
+      Memory memory, String voiceUri, Integer voiceDurationMs) {
+    String uri = optional(voiceUri);
+    if ((uri == null) != (voiceDurationMs == null)) {
+      throw new AppException(
+          ErrorCode.VALIDATION_ERROR,
+          "Voice URI and duration must be provided together");
+    }
+    memory.setVoiceUri(uri);
+    memory.setVoiceDurationMs(voiceDurationMs);
   }
 
   private List<String> tagLabels(UUID memoryId) {

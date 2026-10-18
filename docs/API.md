@@ -4,6 +4,54 @@ Base URL: `{PUBLIC_API_URL}/v1`; local default: `http://localhost:4000/v1`.
 
 Authenticated requests send `Authorization: Bearer <accessToken>`. Pairing routes require a verified account. Successful JSON responses use `{ "data": ... }`; errors use `{ "error": { "code": "...", "message": "...", "issues": [...] }, "requestId": "..." }`. A `204` response has no body.
 
+## Authentication — `/auth`
+
+Passwords created through sign-up or reset must be 8–128 characters and
+contain at least one number and one non-whitespace special character. Login does
+not reapply creation rules, so accounts remain usable if the policy changes.
+
+| Method | Path | Request | Response |
+|---|---|---|---|
+| `POST` | `/auth/signup` | `{ "email", "password" }` | `201 Session` |
+| `POST` | `/auth/login` | `{ "email", "password" }` | `Session` |
+| `POST` | `/auth/refresh` | `{ "refreshToken" }`, or refresh cookie | rotated `Session` |
+| `POST` | `/auth/logout` | `{ "refreshToken" }`, or refresh cookie | `204` |
+| `POST` | `/auth/password/forgot` | `{ "email" }` | `202 { "accepted": true }` |
+| `POST` | `/auth/password/reset` | `{ "token", "newPassword" }` | `{ "reset": true }` |
+| `POST` | `/auth/verify-email/resend` | `{ "email" }` | `202 { "accepted": true }` |
+| `GET` | `/auth/verify-email?token=...` | — | `{ "user": User }` |
+| `GET` | `/auth/me` | bearer token | `{ "user": User }` |
+
+```json
+{
+  "user": {
+    "userId": "uuid",
+    "email": "sam@example.com",
+    "emailVerified": false
+  },
+  "accessToken": "jwt",
+  "expiresIn": 900,
+  "refreshToken": "opaque-token"
+}
+```
+
+Forgot-password always returns Accepted, including for an unknown email, to
+prevent account discovery. Resetting a password revokes every existing refresh
+session and does not create a new session; the user signs in with the new
+password. Refresh tokens rotate, and replaying a replaced token revokes the
+user's sessions.
+
+The email link consumes its token through `GET /auth/verify-email`. That
+response contains the updated user but no new session. A signed-in client that
+returns to the verification screen reads `GET /auth/me` and proceeds only when
+`emailVerified` is true.
+
+Password-reset email links target
+`{PUBLIC_APP_URL}/reset-password?token=...`, where `PUBLIC_APP_URL` is the web
+application origin or the `talesoftwo://` mobile scheme. The frontend consumes
+the token through `POST /auth/password/reset`; the backend does not host a reset
+page.
+
 ## Pairing — `/pairing`
 
 | Method | Path | Request | Response |
@@ -184,6 +232,29 @@ it. Keys are unguessable; responses include strict content type, CSP, and
 Development uses atomic local-file storage. `MEDIA_DRIVER=s3` selects the
 production S3-compatible adapter and returns URLs under
 `MEDIA_S3_PUBLIC_BASE_URL`; credentials come from the AWS SDK provider chain.
+
+Every successful upload is also recorded in the V13 `media_objects` inventory.
+`GET /account/storage` returns `totalBytes`, `photoBytes`, `videoBytes`, and
+`audioBytes` for the caller's couple. The inventory covers uploads made after
+V13; objects created before the migration require a deployment-specific backfill.
+
+## Feedback — `/feedback`
+
+`POST /feedback` accepts `{ "topic": "PROBLEM|IDEA|OTHER", "message": "..." }`
+and returns a durable receipt with its ID, status, and creation time. Messages
+must contain 12–4,000 trimmed characters. V13 owns `user_feedback`.
+
+## Billing, compatibility, and adaptive content
+
+- `GET /account/billing` returns server-authoritative plan entitlements and
+  invoices. The paid plan remains unavailable until a payment provider is
+  configured; this endpoint does not simulate checkout.
+- `GET /compatibility` returns both couple members' names/birthdays and days
+  together. The client derives deterministic positive zodiac facts from this
+  profile data; missing birthdays remain explicitly missing.
+- `GET /content/suggestions` returns two deterministic, couple/day-specific
+  prompts from the curated catalogue. No external AI provider receives couple
+  data.
 
 ## Calendar — `/calendar`
 
@@ -407,6 +478,46 @@ Timeline owns no persistence. It is a read-only, couple-scoped, keyset-paginated
 projection over active Memories and Calendar events plus Story moments and key
 dates.
 
+## Plans and planner — `/plans`, `/planner`
+
+| Method | Path | Result |
+|---|---|---|
+| `GET` | `/plans` | the couple workspace, or `null` before its first save |
+| `PUT` | `/plans` | complete replacement of the couple workspace |
+| `GET` | `/planner/destinations` | deterministic destination catalogue |
+| `POST` | `/planner/generate` | generated itinerary matching the Plans trip contract |
+
+Plans state is limited to 512 KB and persisted as a versioned couple-scoped
+JSON document. Relative `me`/`partner` identifiers are canonicalized to user
+UUIDs at rest and translated for each viewer. Sealed letter bodies are masked
+on reads and preserved when a client replaces a workspace containing a masked
+letter. Due letters are released according to UTC calendar date.
+
+The planner is deterministic and has no external model/provider dependency.
+It supports the configured destination catalogue and at most 14 nights.
+
+## User preferences — `/preferences`
+
+`GET /preferences` returns the authenticated user's privacy and chat-behaviour
+preferences. `PUT /preferences` replaces the complete preference object. The
+API accepts only the frontend's known preference keys and limits the document
+to 32 KB. This route is distinct from notification preferences under
+`/notifications/preferences`.
+
+## Shared Places — `/plans/places`
+
+| Method | Path | Result |
+|---|---|---|
+| `GET` | `/plans/places` | active viewer-relative current fixes and distance |
+| `PUT` | `/plans/places/me` | replace the caller's current fix and sharing window |
+| `DELETE` | `/plans/places/me` | immediately stop sharing and delete the current fix |
+
+The request includes latitude, longitude, optional accuracy/battery/activity,
+IANA timezone, and `ONE_HOUR`, `TONIGHT`, or `UNTIL_OFF`. The server controls
+expiry. Expired rows are deleted and never returned. The table stores one
+replaceable current fix per member; it is intentionally not a location-history
+or tracking table. Flyway `V12__ephemeral_location_sharing.sql` owns this data.
+
 ## Daily Question — `/daily-question`
 
 Both routes require a verified account in a connected, writable couple.
@@ -487,9 +598,23 @@ Client frames:
 - `{ "type": "typing", "isTyping": true }`
 - `{ "type": "read", "upToMessageId": "uuid" }`
 - `{ "type": "ping" }`
+- `{ "type": "watch:join" }` / `{ "type": "watch:leave" }`
+- `{ "type": "watch:playback", "action": "play|pause|seek", "positionSeconds": 42.5 }`
+- `{ "type": "watch:whisper", "text": "...", "positionSeconds": 42.5 }`
+- `{ "type": "watch:reaction", "emoji": "❤️" }`
+- `{ "type": "call:signal", "callId": "...", "mode": "voice|video", "action": "invite|accept|decline|end" }`
 
 Server frames use `message`, `typing`, `status`, `reaction`, `pin`, `presence`,
-or `pong`. Protocol ping/pong runs every 30 seconds and removes stale sockets.
+`watch:presence`, `watch:playback`, `watch:whisper`, `watch:reaction`,
+`call:signal`, or `pong`.
+Watch frames are validated and relayed only to the authenticated partner in the
+same couple. Protocol ping/pong runs every 30 seconds and removes stale sockets.
+Call frames provide lifecycle signaling only; audio/video transport still
+requires a WebRTC media provider and is not simulated by this API.
+Relayed `call:signal` frames also contain `from`, the authenticated sender UUID,
+and `sentAt`, the server's Unix timestamp in milliseconds. `callId` must contain
+8–80 ASCII letters, digits, or hyphens. The server ignores unknown modes,
+actions, and malformed identifiers rather than relaying untrusted fields.
 The socket is a notification channel only: HTTP remains authoritative for
 writes and reconnect catch-up. The current hub is in-process; horizontal scale
 requires replacing its publish boundary with shared pub/sub.

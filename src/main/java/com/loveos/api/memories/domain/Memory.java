@@ -23,6 +23,9 @@ public class Memory {
   @Column(length = 500) private String caption;
   @Column(length = 160) private String location;
   @Column(length = 4000) private String note;
+  @Column(name = "video_uri", length = 2048) private String videoUri;
+  @Column(name = "voice_uri", length = 2048) private String voiceUri;
+  @Column(name = "voice_duration_ms") private Integer voiceDurationMs;
   @Column(nullable = false) private boolean favorite;
   @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;

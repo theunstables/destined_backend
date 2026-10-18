@@ -33,7 +33,11 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "loveos")
 @Validated
 public record AppProperties(
-    @Valid Jwt jwt, @Valid Tokens tokens, @Valid Mail mail, String publicApiUrl) {
+    @Valid Jwt jwt,
+    @Valid Tokens tokens,
+    @Valid Mail mail,
+    @NotBlank String publicApiUrl,
+    @NotBlank String publicAppUrl) {
 
   public record Jwt(
       @NotBlank

@@ -58,7 +58,7 @@ class AuthControllerContractTest {
     mvc.perform(post("/v1/auth/signup")
             .header("x-request-id", "contract-test-123")
             .contentType(MediaType.APPLICATION_JSON)
-          .content("{\"email\":\"sam@example.com\",\"password\":\"Password1\"}"))
+          .content("{\"email\":\"sam@example.com\",\"password\":\"Password1!\"}"))
         .andExpect(status().isCreated())
         .andExpect(header().string("x-request-id", "contract-test-123"))
         .andExpect(jsonPath("$.requestId").value("contract-test-123"))
@@ -78,6 +78,15 @@ class AuthControllerContractTest {
         .andExpect(jsonPath("$.error.issues").isArray())
         .andExpect(jsonPath("$.requestId").isString());
   }
+
+        @Test
+        void signupRejectsPasswordWithoutSpecialCharacter() throws Exception {
+          mvc.perform(post("/v1/auth/signup")
+          .contentType(MediaType.APPLICATION_JSON)
+          .content("{\"email\":\"sam@example.com\",\"password\":\"Password1\"}"))
+          .andExpect(status().isUnprocessableEntity())
+          .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+        }
 
   @Test
   void malformedJsonReturnsInvalidRequestEnvelope() throws Exception {
@@ -136,7 +145,7 @@ class AuthControllerContractTest {
   void resetPasswordReturnsStableEnvelope() throws Exception {
     mvc.perform(post("/v1/auth/password/reset")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"token\":\"reset-token\",\"newPassword\":\"NewPassword1\"}"))
+            .content("{\"token\":\"reset-token\",\"newPassword\":\"NewPassword1!\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.reset").value(true));
   }

@@ -80,7 +80,7 @@ class AuthServiceTest {
   @Test
   void signupNormalizesEmailAndCreatesVerificationAndSession() {
     var result = service.signUp(
-        new AuthRequests.SignUp("  Sam@Example.COM ", "Password1"),
+        new AuthRequests.SignUp("  Sam@Example.COM ", "Password1!"),
         new AuthService.DeviceContext("test-agent", "ip-hash"));
 
     assertThat(result.user().email()).isEqualTo("sam@example.com");
@@ -97,7 +97,7 @@ class AuthServiceTest {
     when(users.existsByEmail("sam@example.com")).thenReturn(true);
 
     assertThatThrownBy(() -> service.signUp(
-        new AuthRequests.SignUp("sam@example.com", "Password1"),
+        new AuthRequests.SignUp("sam@example.com", "Password1!"),
         new AuthService.DeviceContext(null, null)))
         .isInstanceOfSatisfying(AppException.class,
             error -> assertThat(error.code()).isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS));
@@ -142,6 +142,7 @@ class AuthServiceTest {
             Duration.ofDays(30)),
         new AppProperties.Tokens(Duration.ofHours(24), Duration.ofMinutes(30), 32),
         new AppProperties.Mail("LoveOS <test@loveos.invalid>", "console"),
-        "http://localhost:4000");
+        "http://localhost:4000",
+        "talesoftwo://");
   }
 }

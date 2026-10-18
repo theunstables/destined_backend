@@ -72,6 +72,7 @@ deliberate:
 | `DATABASE_URL` | defaults to `jdbc:postgresql://localhost:5432/loveos` |
 | `MAIL_DRIVER` | `console` or `smtp` |
 | `CORS_ORIGINS` | comma-separated allow-list |
+| `PUBLIC_APP_URL` | frontend origin or `talesoftwo://` deep-link base |
 | `MEDIA_LOCAL_DIR` | local-development object directory; defaults to `~/.loveos/media` |
 | `MEDIA_MAX_BYTES` | upload limit in bytes; defaults to 25 MB |
 
@@ -114,7 +115,8 @@ with a string printed in this repository.
 | `MAIL_DRIVER` | ✅ | `smtp` in production. `console` only prints to the log |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | ✅ | with `SMTP_AUTH=true`, `SMTP_TLS=true` |
 | `MAIL_FROM` | | a verified sender on your domain |
-| `PUBLIC_API_URL` | ✅ | the externally reachable base URL — this is what verification and reset links are built from, so a wrong value produces emails nobody can act on |
+| `PUBLIC_API_URL` | ✅ | externally reachable API base used by verification links and public media URLs |
+| `PUBLIC_APP_URL` | ✅ | the web origin or mobile deep-link base used by password-reset emails, for example `https://app.example.com` or `talesoftwo://` |
 | `CORS_ORIGINS` | ✅ | explicit allow-list; never `*` |
 | `MEDIA_DRIVER` | ✅ | `local` for development or `s3` for production object storage |
 | `MEDIA_LOCAL_DIR` | when local | persistent directory outside the application artifact |
@@ -169,6 +171,8 @@ messaging/domain · repo · dto · MessagingService · MessagingController
 realtime/ authenticated WebSocket handler · couple/user hub · heartbeat
 account/  privacy export · deletion grace and tombstoning
 notifications/ preferences · quiet hours · device registration
+preferences/ user-scoped privacy · chat-behaviour settings
+plans/    couple workspace · deterministic planner · ephemeral shared places
 timeline/ read-only Story/Calendar/Memories projection
 dailyquestions/ static daily assignment · reciprocity gate · Memory completion
 repairsignal/ quiet expiring signal · symmetric mutual readiness · cancellation

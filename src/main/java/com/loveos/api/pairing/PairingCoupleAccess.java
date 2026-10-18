@@ -53,7 +53,7 @@ class PairingCoupleAccess implements CoupleAccess {
           var user = users.findById(member.getUserId())
               .orElseThrow(() -> AppException.notFound("Member not found"));
           return new Member(user.getId(), Role.valueOf(member.getRole().name()),
-              user.getDisplayName(), user.getNickname());
+              user.getDisplayName(), user.getNickname(), user.getBirthday());
         })
         .toList();
   }

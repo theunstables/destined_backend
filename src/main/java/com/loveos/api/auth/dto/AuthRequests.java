@@ -25,18 +25,16 @@ public final class AuthRequests {
   private AuthRequests() {}
 
   /**
-   * The password policy: 8–128 characters, at least one letter and one digit.
+    * The approved A03 password policy: 8–128 characters, at least one digit and
+    * one non-whitespace special character.
    *
-   * <p>Deliberately not a maze of symbol requirements. Long-standing NIST
-   * guidance is that composition rules push people towards {@code Password1!}
-   * and a sticky note, while length does the real work. The 128 ceiling is a
-   * denial-of-service guard: bcrypt's cost is bounded by input size, and an
-   * unbounded password is an unbounded hash.
+    * <p>The 128 ceiling is a denial-of-service guard: bcrypt's cost is bounded
+    * by input size, and an unbounded password is an unbounded hash.
    */
-  private static final String PASSWORD_RULE = "^(?=.*[A-Za-z])(?=.*\\d).{8,128}$";
+    private static final String PASSWORD_RULE = "^(?=.*\\d)(?=.*[^A-Za-z0-9\\s]).{8,128}$";
 
   private static final String PASSWORD_MESSAGE =
-      "Use 8–128 characters with at least one letter and one number";
+    "Use 8–128 characters with at least one number and one special character";
 
   public record SignUp(
       @NotBlank @Email(message = "Enter a valid email address") @Size(max = 254) String email,

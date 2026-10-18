@@ -7,7 +7,8 @@ public final class MemoryResponses {
 
   public record MemoryDto(
       String id, String title, String date, String caption, String location,
-      String photoUri, List<String> photos, String note, List<String> tags,
+      String photoUri, String videoUri, String voiceUri, Integer voiceDurationMs,
+      List<String> photos, String note, List<String> tags,
       boolean favorite, String addedBy, String createdAt, String updatedAt,
       String myPrivateNote, String partnerPrivateNote, boolean reciprocalNotesRevealed) {}
 
