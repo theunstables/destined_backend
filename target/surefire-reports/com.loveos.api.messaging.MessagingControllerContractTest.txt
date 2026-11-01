@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.loveos.api.messaging.MessagingControllerContractTest
+-------------------------------------------------------------------------------
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.120 s -- in com.loveos.api.messaging.MessagingControllerContractTest
