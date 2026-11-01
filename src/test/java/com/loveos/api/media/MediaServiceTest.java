@@ -18,30 +18,28 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class MediaServiceTest {
 
   private CoupleAccess couples;
   private InMemoryStorage storage;
   private MediaService service;
-  private MediaObjectRepository objects;
   private UUID userId;
   private UUID coupleId;
+  private MediaAssetRepository assets;
 
   @BeforeEach
   void setUp() {
     couples = org.mockito.Mockito.mock(CoupleAccess.class);
     storage = new InMemoryStorage();
-    objects = org.mockito.Mockito.mock(MediaObjectRepository.class);
-    userId = UUID.randomUUID();
-    coupleId = UUID.randomUUID();
-    when(couples.requireMembershipForUpdate(userId)).thenReturn(
-      new CoupleAccess.Membership(coupleId, CoupleAccess.Role.FOUNDER, true));
     AppProperties app = org.mockito.Mockito.mock(AppProperties.class);
     when(app.publicApiUrl()).thenReturn("https://api.example.test/");
+    assets = org.mockito.Mockito.mock(MediaAssetRepository.class);
     service = new MediaService(couples, storage,
-      new MediaProperties("local", Path.of("unused"), 25 * 1024 * 1024), objects, app);
+      new MediaProperties("local", Path.of("unused"), 25 * 1024 * 1024), app, assets);
+    userId = UUID.randomUUID();
+    coupleId = UUID.randomUUID();
+    when(couples.requireMembership(userId)).thenReturn(new CoupleAccess.Membership(coupleId, CoupleAccess.Role.FOUNDER, true));
   }
 
   @Test
@@ -51,15 +49,13 @@ class MediaServiceTest {
     var result = service.upload(userId,
         new MediaService.UploadInput(new ByteArrayInputStream(jpeg), "image/jpeg", jpeg.length));
 
-    verify(couples).requireMembershipForUpdate(userId);
-    assertThat(result.url()).matches("https://api\\.example\\.test/media/[0-9a-f-]{36}\\.jpg");
+    verify(couples).requireMembership(userId);
+    assertThat(result.url()).matches("https://api\\.example\\.test/v1/media/[0-9a-f-]{36}\\.jpg");
     assertThat(result.contentType()).isEqualTo("image/jpeg");
     assertThat(storage.bytes).containsExactly(jpeg);
-    ArgumentCaptor<MediaObject> saved = ArgumentCaptor.forClass(MediaObject.class);
-    verify(objects).save(saved.capture());
-    assertThat(saved.getValue().getCoupleId()).isEqualTo(coupleId);
-    assertThat(saved.getValue().getUploadedBy()).isEqualTo(userId);
-    assertThat(saved.getValue().getBytes()).isEqualTo(jpeg.length);
+    var captured = org.mockito.ArgumentCaptor.forClass(MediaAsset.class);
+    verify(assets).saveAndFlush(captured.capture());
+    assertThat(captured.getValue().getCoupleId()).isEqualTo(coupleId);
   }
 
   @Test
@@ -85,7 +81,29 @@ class MediaServiceTest {
     AppProperties app = org.mockito.Mockito.mock(AppProperties.class);
     when(app.publicApiUrl()).thenReturn("https://api.example.test");
     return new MediaService(couples, storage,
-      new MediaProperties("local", Path.of("unused"), maximum), objects, app);
+        new MediaProperties("local", Path.of("unused"), maximum), app, assets);
+  }
+
+  @Test
+  void deniesUnknownOrOtherCouplesMediaBeforeLoadingStorage() {
+    String key = "3cd94be6-4665-4ebc-8eac-f84bf1dfa678.jpg";
+    assertThatThrownBy(() -> service.load(userId, key)).isInstanceOf(AppException.class);
+    verify(assets).findByObjectKeyAndCoupleIdAndStorageDriver(key, coupleId, "local");
+  }
+
+  @Test
+  void permitsBothCurrentCoupleMembersButNotAnotherCouple() {
+    String key = "3cd94be6-4665-4ebc-8eac-f84bf1dfa678.jpg";
+    var asset = new MediaAsset();
+    asset.setContentType("image/jpeg");
+    when(assets.findByObjectKeyAndCoupleIdAndStorageDriver(key, coupleId, "local")).thenReturn(Optional.of(asset));
+    storage.bytes = new byte[] {1, 2, 3};
+    UUID partner = UUID.randomUUID();
+    when(couples.requireMembership(partner)).thenReturn(new CoupleAccess.Membership(coupleId, CoupleAccess.Role.MEMBER, true));
+    assertThat(service.load(partner, key).contentType()).isEqualTo("image/jpeg");
+    UUID outsider = UUID.randomUUID();
+    when(couples.requireMembership(outsider)).thenReturn(new CoupleAccess.Membership(UUID.randomUUID(), CoupleAccess.Role.FOUNDER, true));
+    assertThatThrownBy(() -> service.load(outsider, key)).isInstanceOf(AppException.class);
   }
 
   private static final class InMemoryStorage implements StorageProvider {
@@ -101,7 +119,7 @@ class MediaServiceTest {
 
     @Override
     public Optional<StoredObject> load(String key) {
-      return Optional.empty();
+      return bytes == null ? Optional.empty() : Optional.of(new StoredObject(new ByteArrayInputStream(bytes), bytes.length));
     }
   }
 }

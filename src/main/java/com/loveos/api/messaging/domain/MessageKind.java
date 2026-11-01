@@ -4,5 +4,7 @@ public enum MessageKind {
   TEXT,
   PHOTO,
   VOICE,
-  VIDEO
+  VIDEO,
+  NOTE,
+  LOCATION
 }

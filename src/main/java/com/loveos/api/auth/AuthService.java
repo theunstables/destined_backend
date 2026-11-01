@@ -129,6 +129,42 @@ public class AuthService {
   // ── Sign-in ─────────────────────────────────────────────────────────────────
 
   @Transactional
+  public AuthResponses.SessionDto googleSignIn(
+      GoogleTokenVerifier.Identity identity, UUID linkUserId, DeviceContext device) {
+    String email = normalise(identity.email());
+    User linked = users.findByGoogleSubject(identity.subject()).orElse(null);
+    if (linkUserId != null) {
+      User target = users.findByIdForUpdate(linkUserId).orElseThrow(AppException::invalidCredentials);
+      if (!target.isEmailVerified() || target.getDeletedAt() != null || !target.getEmail().equals(email)
+          || (linked != null && !linked.getId().equals(linkUserId))
+          || (target.getGoogleSubject() != null && !target.getGoogleSubject().equals(identity.subject()))) {
+        throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "This Google identity cannot be linked to this account");
+      }
+      target.setGoogleSubject(identity.subject());
+      users.saveAndFlush(target);
+      return newSession(target, device);
+    }
+    if (linked != null) {
+      if (linked.getDeletedAt() != null) throw AppException.invalidCredentials();
+      return newSession(linked, device);
+    }
+    if (users.existsByEmail(email)) {
+      throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "Sign in with your password first, then connect Google from your account");
+    }
+    User user = new User();
+    user.setEmail(email);
+    user.setEmailVerified(identity.emailAuthoritative());
+    user.setGoogleSubject(identity.subject());
+    try {
+      users.saveAndFlush(user);
+    } catch (DataIntegrityViolationException collision) {
+      throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "An account already exists. Try signing in again.");
+    }
+    if (!user.isEmailVerified()) issueVerificationEmail(user);
+    return newSession(user, device);
+  }
+
+  @Transactional
   public AuthResponses.SessionDto login(AuthRequests.Login request, DeviceContext device) {
     String email = normalise(request.email());
     Optional<User> found = users.findByEmail(email);
@@ -153,6 +189,41 @@ public class AuthService {
       throw AppException.invalidCredentials();
     }
 
+    return newSession(user, device);
+  }
+
+  @Transactional
+  public AuthResponses.SessionDto appleSignIn(
+      AppleTokenVerifier.Identity identity, UUID linkUserId, DeviceContext device) {
+    String email = normalise(identity.email());
+    User linked = users.findByAppleSubject(identity.subject()).orElse(null);
+    if (linkUserId != null) {
+      User target = users.findByIdForUpdate(linkUserId).orElseThrow(AppException::invalidCredentials);
+      if (!target.isEmailVerified() || target.getDeletedAt() != null
+          || (linked != null && !linked.getId().equals(linkUserId))
+          || (target.getAppleSubject() != null && !target.getAppleSubject().equals(identity.subject()))) {
+        throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "This Apple identity cannot be linked to this account");
+      }
+      target.setAppleSubject(identity.subject());
+      users.saveAndFlush(target);
+      return newSession(target, device);
+    }
+    if (linked != null) {
+      if (linked.getDeletedAt() != null) throw AppException.invalidCredentials();
+      return newSession(linked, device);
+    }
+    if (users.existsByEmail(email)) {
+      throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "Sign into your existing account first, then connect Apple from Security settings");
+    }
+    User user = new User();
+    user.setEmail(email);
+    user.setEmailVerified(true);
+    user.setAppleSubject(identity.subject());
+    try {
+      users.saveAndFlush(user);
+    } catch (DataIntegrityViolationException collision) {
+      throw new AppException(ErrorCode.ACCOUNT_CONFLICT, "An account already exists. Try signing in again.");
+    }
     return newSession(user, device);
   }
 

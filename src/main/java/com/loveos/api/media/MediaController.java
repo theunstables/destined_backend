@@ -37,14 +37,17 @@ public class MediaController {
             new MediaService.UploadInput(file.getInputStream(), file.getContentType(), file.getSize()))));
   }
 
-  @GetMapping("/media/{key}")
-  public ResponseEntity<InputStreamResource> download(@PathVariable String key) {
-    MediaService.StoredMedia media = mediaService.load(key);
+  @GetMapping({"/media/{key}", "/v1/media/{key}"})
+  public ResponseEntity<InputStreamResource> download(
+      @PathVariable String key, @AuthenticationPrincipal AuthenticatedUser principal) {
+    if (principal == null) throw AppException.unauthorized("Sign in to view media");
+    MediaService.StoredMedia media = mediaService.load(principal.userId(), key);
     InputStream content = media.object().content();
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(media.contentType()))
         .contentLength(media.object().bytes())
-        .cacheControl(CacheControl.noCache())
+        .cacheControl(CacheControl.noStore())
+        .header("Referrer-Policy", "no-referrer")
         .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
         .header("X-Content-Type-Options", "nosniff")
         .header("Content-Security-Policy", "default-src 'none'; sandbox")

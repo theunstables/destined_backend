@@ -21,6 +21,8 @@ import org.springframework.data.repository.query.Param;
 public interface UserRepository extends JpaRepository<User, UUID> {
 
   Optional<User> findByEmail(String email);
+  Optional<User> findByGoogleSubject(String subject);
+  Optional<User> findByAppleSubject(String subject);
 
   boolean existsByEmail(String email);
 

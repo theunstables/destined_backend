@@ -11,9 +11,5 @@ public interface StorageProvider {
 
   Optional<StoredObject> load(String key) throws IOException;
 
-  default String publicUrl(String key, String fallback) {
-    return fallback;
-  }
-
   record StoredObject(InputStream content, long bytes) {}
 }

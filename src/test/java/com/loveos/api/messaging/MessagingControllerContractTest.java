@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -76,6 +78,31 @@ class MessagingControllerContractTest {
                 {"kind":"text","body":"Hello","clientId":"client-12345678"}
                 """))
         .andExpect(status().isOk());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "{\"kind\":\"note\",\"body\":\"Remember our tickets\"}",
+      "{\"kind\":\"location\",\"mediaUri\":\"https://www.openstreetmap.org/?mlat=17.4&mlon=78.5\"}"
+  })
+  void acceptsNotesAndValidLocations(String body) throws Exception {
+    when(service.send(eq(userId), any())).thenReturn(new MessagingService.SendResult(message(), false, messageId));
+    mvc.perform(post("/v1/chat/messages").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isCreated());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "{\"kind\":\"note\",\"body\":\"  \"}",
+      "{\"kind\":\"location\",\"mediaUri\":\"https://evil.example/?mlat=17&mlon=78\"}",
+      "{\"kind\":\"location\",\"mediaUri\":\"https://www.openstreetmap.org/?mlat=91&mlon=78\"}",
+      "{\"kind\":\"location\",\"mediaUri\":\"https://www.openstreetmap.org/?mlat=17&mlon=181\"}",
+      "{\"kind\":\"location\",\"mediaUri\":\"https://www.openstreetmap.org/?mlat=NaN&mlon=78\"}",
+      "{\"kind\":\"location\"}"
+  })
+  void rejectsInvalidNotesAndLocations(String body) throws Exception {
+    mvc.perform(post("/v1/chat/messages").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isUnprocessableEntity());
   }
 
   @Test

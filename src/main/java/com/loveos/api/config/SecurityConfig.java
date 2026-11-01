@@ -92,9 +92,7 @@ public class SecurityConfig {
             // interceptor verifies the short-lived access token from `?token=`.
             .requestMatchers("/ws").permitAll()
 
-            // Stored objects use unguessable UUID keys and must be fetchable by
-            // native image/video components, which cannot attach bearer headers.
-            .requestMatchers(HttpMethod.GET, "/media/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/media/**", "/v1/media/**").authenticated()
 
             /*
              * The public auth surface. Every one of these is reachable by
@@ -104,6 +102,14 @@ public class SecurityConfig {
             .requestMatchers(
                 "/v1/auth/signup",
                 "/v1/auth/login",
+                "/v1/auth/google/config",
+                "/v1/auth/google/start",
+                "/v1/auth/google/callback",
+                "/v1/auth/google/exchange",
+                "/v1/auth/apple/config",
+                "/v1/auth/apple/start",
+                "/v1/auth/apple/callback",
+                "/v1/auth/apple/exchange",
                 "/v1/auth/refresh",
                 "/v1/auth/logout",
                 "/v1/auth/password/forgot",
@@ -197,6 +203,12 @@ public class SecurityConfig {
     configuration.setMaxAge(3600L);
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    CorsConfiguration appleCallback = new CorsConfiguration();
+    appleCallback.setAllowedOrigins(List.of("https://appleid.apple.com"));
+    appleCallback.setAllowedMethods(List.of("POST", "OPTIONS"));
+    appleCallback.setAllowedHeaders(List.of("Content-Type", "Accept"));
+    appleCallback.setAllowCredentials(false);
+    source.registerCorsConfiguration("/v1/auth/apple/callback", appleCallback);
     source.registerCorsConfiguration("/**", configuration);
     return source;
   }

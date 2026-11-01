@@ -63,6 +63,12 @@ public class User {
   @Column(name = "password_hash", length = 255)
   private String passwordHash;
 
+  @Column(name = "google_subject", length = 255, unique = true)
+  private String googleSubject;
+
+  @Column(name = "apple_subject", length = 255, unique = true)
+  private String appleSubject;
+
   @Column(name = "display_name", length = 120)
   private String displayName;
 

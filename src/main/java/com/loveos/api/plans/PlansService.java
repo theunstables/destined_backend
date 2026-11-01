@@ -1,220 +1,179 @@
 package com.loveos.api.plans;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 import com.loveos.api.core.AppException;
 import com.loveos.api.core.ErrorCode;
 import com.loveos.api.pairing.CoupleAccess;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class PlansService {
-  private static final int MAX_BYTES = 512 * 1024;
-  private static final Set<String> REQUIRED_KEYS = Set.of(
-      "trip", "yearBoard", "promises", "lifetimeTarget", "capsules", "letters",
-      "watchRoom", "sharingWindow", "minutesRemaining");
-  private static final Set<String> PARTNER_FIELDS = Set.of("from", "to", "sealedBy", "pickedBy", "who");
+  private final CoupleAccess access;
+  private final PlansRepository documents;
+  private final ObjectMapper json;
 
-  private final CouplePlanStateRepository repository;
-  private final CoupleAccess couples;
-  private final ObjectMapper mapper;
-
-  public PlansService(
-      CouplePlanStateRepository repository, CoupleAccess couples, ObjectMapper mapper) {
-    this.repository = repository;
-    this.couples = couples;
-    this.mapper = mapper;
+  public PlansService(CoupleAccess access, PlansRepository documents, ObjectMapper json) {
+    this.access = access;
+    this.documents = documents;
+    this.json = json;
   }
 
   @Transactional(readOnly = true)
-  public JsonNode get(UUID userId) {
-    CoupleAccess.Membership membership = couples.requireMembership(userId);
-    return repository.findById(membership.coupleId())
-        .map(row -> relative(parse(row.getJson()), identities(userId)))
-        .orElse(null);
+  public ObjectNode get(UUID userId) {
+    UUID coupleId = access.requireMembership(userId).coupleId();
+    return documents.findById(coupleId).map(document -> view(document, userId)).orElse(null);
   }
 
   @Transactional
-  public JsonNode replace(UUID userId, JsonNode state) {
-    CoupleAccess.Membership membership = couples.requireMembershipForUpdate(userId);
-    validate(state);
-    Identities identities = identities(userId);
-    JsonNode canonical = canonical(state.deepCopy(), identities);
-    CouplePlanState row = repository.findById(membership.coupleId()).orElseGet(CouplePlanState::new);
-    if (row.getJson() != null) {
-      JsonNode stored = parse(row.getJson());
-      preventEarlyCapsuleOpening(stored, canonical);
-      preserveSealedLetterBodies(stored, canonical);
-    } else {
-      preventEarlyCapsuleOpening(null, canonical);
+  public ObjectNode replace(UUID userId, ObjectNode input) {
+    UUID coupleId = access.requireMembershipForUpdate(userId).coupleId();
+    if (input == null || json.writeValueAsString(input).length() > 200_000) {
+      throw invalid("Plans exceed the size limit");
     }
-    row.setCoupleId(membership.coupleId());
-    row.setVersion(row.getVersion() + 1);
-    row.setUpdatedBy(userId);
-    row.setJson(write(canonical));
-    repository.saveAndFlush(row);
-    return relative(canonical.deepCopy(), identities);
+    PlansDocument document = documents.findById(coupleId).orElse(null);
+    if (document != null && (!input.path("revision").isIntegralNumber()
+      || input.path("revision").asLong(-1) != document.getRevision())) {
+      throw invalid("Plans changed on another device. Reload before saving.");
+    }
+    ObjectNode next = input.deepCopy();
+    next.retain("trip", "yearBoard", "promises", "lifetimeTarget", "capsules", "letters",
+      "watchRoom", "sharingWindow", "minutesRemaining");
+    ObjectNode previous = document == null ? json.createObjectNode() : parse(document);
+    validateBoard(next.path("yearBoard"));
+    mergeSealed(next, previous, "capsules", userId);
+    mergeSealed(next, previous, "letters", userId);
+    next.remove("revision");
+    if (document == null) {
+      document = new PlansDocument();
+      document.setCoupleId(coupleId);
+    }
+    document.setPayload(json.writeValueAsString(next));
+    return view(documents.saveAndFlush(document), userId);
   }
 
-  private Identities identities(UUID userId) {
-    List<CoupleAccess.Member> members = couples.members(userId);
-    UUID partnerId = members.stream().map(CoupleAccess.Member::userId)
-        .filter(id -> !id.equals(userId)).findFirst().orElse(null);
-    return new Identities(userId, partnerId);
-  }
-
-  private void validate(JsonNode state) {
-    if (state == null || !state.isObject()) {
-      throw new AppException(ErrorCode.VALIDATION_ERROR, "Plans state must be an object");
+  private void validateBoard(JsonNode board) {
+    if (!board.isObject() || !board.path("tiles").isArray() || board.path("tiles").size() > 25) {
+      throw invalid("A Bingo board supports up to 25 cards");
     }
-    for (String key : REQUIRED_KEYS) {
-      if (!state.has(key)) {
-        throw new AppException(ErrorCode.VALIDATION_ERROR, "Plans state is missing " + key);
+    Set<String> ids = new HashSet<>();
+    for (JsonNode tile : board.path("tiles")) {
+        if (!tile.isObject() || !tile.path("id").isString() || tile.path("id").asText().isBlank() || !ids.add(tile.path("id").asText())
+          || !tile.path("title").isString() || tile.path("title").asText().isBlank() || tile.path("title").asText().length() > 140
+          || (!tile.path("note").isMissingNode() && !tile.path("note").isNull() && !tile.path("note").isString())
+          || tile.path("note").asText().length() > 1000
+          || !Set.of("todo", "in-progress", "done").contains(tile.path("state").asText())) {
+        throw invalid("Invalid Bingo card");
       }
     }
-    int size = write(state).getBytes(StandardCharsets.UTF_8).length;
-    if (size > MAX_BYTES) {
-      throw new AppException(ErrorCode.PAYLOAD_TOO_LARGE, "Plans state exceeds 512 KB");
-    }
   }
 
-  private JsonNode canonical(JsonNode node, Identities identities) {
-    transformPartnerIds(node, identities, true);
-    return node;
-  }
-
-  private JsonNode relative(JsonNode node, Identities identities) {
-    transformPartnerIds(node, identities, false);
-    releaseDueLetters(node);
-    maskSealedLetters(node);
-    return node;
-  }
-
-  private void transformPartnerIds(JsonNode node, Identities identities, boolean toCanonical) {
-    if (node instanceof ObjectNode object) {
-      for (String field : List.copyOf(object.propertyNames())) {
-        JsonNode value = object.get(field);
-        if (PARTNER_FIELDS.contains(field) && value != null && value.isTextual()) {
-          String mapped = toCanonical
-              ? canonicalId(value.asText(), identities)
-              : relativeId(value.asText(), identities);
-          if (mapped != null) object.put(field, mapped);
+  private void mergeSealed(ObjectNode next, ObjectNode previous, String field, UUID userId) {
+    JsonNode supplied = next.path(field);
+    if (!supplied.isArray() || supplied.size() > 200) throw invalid("Invalid " + field);
+    Map<String, JsonNode> existing = new HashMap<>();
+    previous.path(field).forEach(item -> existing.put(item.path("id").asText(), item));
+    Set<String> ids = new HashSet<>();
+    ArrayNode merged = json.createArrayNode();
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    for (JsonNode item : supplied) {
+      String id = item.path("id").asText();
+      if (!item.isObject() || id.isBlank() || !ids.add(id)) throw invalid("Invalid sealed item");
+      ObjectNode stored;
+      if (existing.containsKey(id)) {
+        stored = (ObjectNode) existing.get(id).deepCopy();
+        boolean opening = field.equals("capsules") ? item.path("opened").asBoolean()
+            : item.path("state").asText().equals("opened");
+        if (opening && date(stored.path("opensAt").asText()).isAfter(today)) {
+          throw invalid("This item is still sealed");
+        }
+        if (opening) {
+          if (field.equals("capsules")) stored.put("opened", true);
+          else stored.put("state", "opened");
+        }
+      } else {
+        stored = (ObjectNode) item.deepCopy();
+        LocalDate opensAt = date(stored.path("opensAt").asText());
+        if (!stored.path("title").isString() || stored.path("title").asText().isBlank() || stored.path("title").asText().length() > 140) {
+          throw invalid("A title is required");
+        }
+        stored.put("authorId", userId.toString());
+        if (field.equals("capsules")) {
+          if (!opensAt.isAfter(today)) throw invalid("Choose a future capsule date");
+          JsonNode payload = stored.path("payload");
+          if (!payload.isObject() || payload.isEmpty()) throw invalid("Add content to the capsule");
+          ObjectNode counts = json.createObjectNode();
+          for (String kind : payload.propertyNames()) {
+            if (!Set.of("letter", "prediction", "promise", "question").contains(kind)
+                || !payload.path(kind).isString() || payload.path(kind).asText().isBlank()
+                || payload.path(kind).asText().length() > 5000) throw invalid("Invalid capsule content");
+            counts.put(kind, 1);
+          }
+          stored.set("contents", counts);
+          stored.put("createdAt", today.toString());
+          stored.put("opened", false);
+          stored.put("vaultCode", "TOT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         } else {
-          transformPartnerIds(value, identities, toCanonical);
+          if (stored.path("body").asText().isBlank() || stored.path("body").asText().length() > 20_000) {
+            throw invalid("A letter body is required");
+          }
+          stored.put("state", opensAt.isAfter(today) ? "sealed" : "ready");
+          stored.put("writtenAt", today.toString());
+          stored.put("teaser", opensAt.isAfter(today) ? "A letter waiting for you" : stored.path("teaser").asText());
         }
       }
-    } else if (node instanceof ArrayNode array) {
-      array.forEach(item -> transformPartnerIds(item, identities, toCanonical));
+      merged.add(stored);
     }
+    for (String id : existing.keySet()) {
+      if (!ids.contains(id)) merged.add(existing.get(id));
+    }
+    next.set(field, merged);
   }
 
-  private static String canonicalId(String value, Identities identities) {
-    if (value.equals("me")) return identities.me().toString();
-    if (value.equals("partner") && identities.partner() != null) return identities.partner().toString();
-    return value.equals("both") ? value : null;
-  }
-
-  private static String relativeId(String value, Identities identities) {
-    if (value.equals(identities.me().toString())) return "me";
-    if (identities.partner() != null && value.equals(identities.partner().toString())) return "partner";
-    return value.equals("both") ? value : null;
-  }
-
-  private static void maskSealedLetters(JsonNode state) {
-    JsonNode letters = state.get("letters");
-    if (!(letters instanceof ArrayNode array)) return;
-    for (JsonNode item : array) {
-      if (item instanceof ObjectNode letter && "sealed".equals(letter.path("state").asText())) {
-        letter.putNull("body");
+  private ObjectNode view(PlansDocument document, UUID userId) {
+    ObjectNode value = parse(document);
+    value.put("revision", document.getRevision());
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    for (JsonNode item : value.path("capsules")) {
+      ObjectNode capsule = (ObjectNode) item;
+      capsule.put("sealedBy", capsule.path("authorId").asText().equals(userId.toString()) ? "me" : "partner");
+      capsule.remove("authorId");
+      if (!capsule.path("opened").asBoolean() || date(capsule.path("opensAt").asText()).isAfter(today)) {
+        capsule.remove("payload");
       }
     }
+    for (JsonNode item : value.path("letters")) {
+      ObjectNode letter = (ObjectNode) item;
+      boolean mine = letter.path("authorId").asText().equals(userId.toString());
+      letter.put("from", mine ? "me" : "partner");
+      letter.put("to", mine ? "partner" : "me");
+      letter.remove("authorId");
+      if (date(letter.path("opensAt").asText()).isAfter(today)) letter.putNull("body");
+      else if (!letter.path("state").asText().equals("opened")) letter.put("state", "ready");
+    }
+    return value;
   }
 
-  private static void releaseDueLetters(JsonNode state) {
-    JsonNode letters = state.get("letters");
-    if (!(letters instanceof ArrayNode array)) return;
-    LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
-    for (JsonNode item : array) {
-      if (!(item instanceof ObjectNode letter) || !"sealed".equals(letter.path("state").asText())) continue;
-      String opensAt = letter.path("opensAt").asText("");
-      try {
-        if (!LocalDate.parse(opensAt).isAfter(today)) letter.put("state", "ready");
-      } catch (java.time.format.DateTimeParseException ignored) {
-        // Request validation owns malformed user input; an older stored row
-        // should remain sealed rather than making the whole workspace unreadable.
-      }
-    }
+  private ObjectNode parse(PlansDocument document) {
+    return (ObjectNode) json.readTree(document.getPayload());
   }
 
-  private static void preserveSealedLetterBodies(JsonNode stored, JsonNode incoming) {
-    JsonNode oldLetters = stored.get("letters");
-    JsonNode newLetters = incoming.get("letters");
-    if (!(oldLetters instanceof ArrayNode oldArray) || !(newLetters instanceof ArrayNode newArray)) return;
-    HashMap<String, JsonNode> bodies = new HashMap<>();
-    for (JsonNode item : oldArray) {
-      if (item.hasNonNull("id") && item.hasNonNull("body")) {
-        bodies.put(item.get("id").asText(), item.get("body"));
-      }
-    }
-    for (JsonNode item : newArray) {
-      if (!(item instanceof ObjectNode letter) || !letter.hasNonNull("id")) continue;
-      if (letter.path("body").isNull() && bodies.containsKey(letter.get("id").asText())) {
-        letter.set("body", bodies.get(letter.get("id").asText()));
-      }
-    }
+  private static LocalDate date(String value) {
+    try { return LocalDate.parse(value); }
+    catch (RuntimeException invalid) { throw invalid("Invalid unlock date"); }
   }
 
-  private static void preventEarlyCapsuleOpening(JsonNode stored, JsonNode incoming) {
-    JsonNode newCapsules = incoming.get("capsules");
-    if (!(newCapsules instanceof ArrayNode newArray)) return;
-
-    HashMap<String, Boolean> previouslyOpened = new HashMap<>();
-    if (stored != null && stored.get("capsules") instanceof ArrayNode oldArray) {
-      for (JsonNode item : oldArray) {
-        if (item.hasNonNull("id")) {
-          previouslyOpened.put(item.get("id").asText(), item.path("opened").asBoolean(false));
-        }
-      }
-    }
-
-    LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
-    for (JsonNode item : newArray) {
-      if (!item.path("opened").asBoolean(false) ||
-          previouslyOpened.getOrDefault(item.path("id").asText(), false)) continue;
-      try {
-        if (LocalDate.parse(item.path("opensAt").asText()).isAfter(today)) {
-          throw new AppException(ErrorCode.VALIDATION_ERROR, "Capsule cannot be opened yet");
-        }
-      } catch (java.time.format.DateTimeParseException exception) {
-        throw new AppException(ErrorCode.VALIDATION_ERROR, "Capsule open date is invalid");
-      }
-    }
+  private static AppException invalid(String message) {
+    return new AppException(ErrorCode.VALIDATION_ERROR, message);
   }
-
-  private JsonNode parse(String json) {
-    try {
-      return mapper.readTree(json);
-    } catch (Exception exception) {
-      throw new IllegalStateException("Stored plans state is invalid JSON", exception);
-    }
-  }
-
-  private String write(JsonNode value) {
-    try {
-      return mapper.writeValueAsString(value);
-    } catch (Exception exception) {
-      throw new IllegalArgumentException("Plans state cannot be serialized", exception);
-    }
-  }
-
-  private record Identities(UUID me, UUID partner) {}
 }

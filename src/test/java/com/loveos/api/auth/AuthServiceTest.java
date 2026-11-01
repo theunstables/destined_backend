@@ -80,7 +80,7 @@ class AuthServiceTest {
   @Test
   void signupNormalizesEmailAndCreatesVerificationAndSession() {
     var result = service.signUp(
-        new AuthRequests.SignUp("  Sam@Example.COM ", "Password1!"),
+        new AuthRequests.SignUp("  Sam@Example.COM ", "Password1"),
         new AuthService.DeviceContext("test-agent", "ip-hash"));
 
     assertThat(result.user().email()).isEqualTo("sam@example.com");
@@ -97,10 +97,81 @@ class AuthServiceTest {
     when(users.existsByEmail("sam@example.com")).thenReturn(true);
 
     assertThatThrownBy(() -> service.signUp(
-        new AuthRequests.SignUp("sam@example.com", "Password1!"),
+        new AuthRequests.SignUp("sam@example.com", "Password1"),
         new AuthService.DeviceContext(null, null)))
         .isInstanceOfSatisfying(AppException.class,
             error -> assertThat(error.code()).isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS));
+  }
+
+  @Test
+  void googleCreatesVerifiedAccountWithoutPasswordOrVerificationEmail() {
+    var result = service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "New@Example.test", true), null,
+        new AuthService.DeviceContext(null, null));
+    assertThat(result.user().email()).isEqualTo("new@example.test");
+    assertThat(result.user().emailVerified()).isTrue();
+    var user = org.mockito.ArgumentCaptor.forClass(User.class);
+    verify(users).saveAndFlush(user.capture());
+    assertThat(user.getValue().getGoogleSubject()).isEqualTo("google-id");
+    assertThat(user.getValue().getPasswordHash()).isNull();
+    org.mockito.Mockito.verifyNoInteractions(mailer);
+  }
+
+  @Test
+  void googleDoesNotSilentlyLinkAnExistingEmail() {
+    when(users.existsByEmail("existing@example.test")).thenReturn(true);
+    assertThatThrownBy(() -> service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "existing@example.test"), null,
+        new AuthService.DeviceContext(null, null)))
+        .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.code()).isEqualTo(ErrorCode.ACCOUNT_CONFLICT));
+  }
+
+  @Test
+  void returningGoogleUserReusesTheSubjectBoundAccount() {
+    User user = new User();
+    user.setId(UUID.randomUUID());
+    user.setEmail("existing@gmail.com");
+    user.setEmailVerified(true);
+    user.setGoogleSubject("google-id");
+    when(users.findByGoogleSubject("google-id")).thenReturn(Optional.of(user));
+    var result = service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "existing@gmail.com"), null,
+        new AuthService.DeviceContext(null, null));
+    assertThat(result.user().userId()).isEqualTo(user.getId().toString());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.never()).saveAndFlush(any(User.class));
+  }
+
+  @Test
+  void thirdPartyGoogleEmailStillRequiresOurEmailVerification() {
+    var result = service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "third-party@example.test", false), null,
+        new AuthService.DeviceContext(null, null));
+    assertThat(result.user().emailVerified()).isFalse();
+    verify(mailer).sendVerification(eq("third-party@example.test"), any());
+  }
+
+  @Test
+  void googleLinksOnlyTheSignedInVerifiedMatchingAccount() {
+    UUID userId = UUID.randomUUID();
+    User user = new User();
+    user.setId(userId);
+    user.setEmail("existing@example.test");
+    user.setEmailVerified(true);
+    user.setPasswordHash("keep-password");
+    when(users.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+    service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "existing@example.test"), userId,
+        new AuthService.DeviceContext(null, null));
+    assertThat(user.getGoogleSubject()).isEqualTo("google-id");
+    assertThat(user.getPasswordHash()).isEqualTo("keep-password");
+  }
+
+  @Test
+  void googleRejectsLinkingADifferentEmail() {
+    UUID userId = UUID.randomUUID();
+    User user = new User();
+    user.setId(userId);
+    user.setEmail("existing@example.test");
+    user.setEmailVerified(true);
+    when(users.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+    assertThatThrownBy(() -> service.googleSignIn(new GoogleTokenVerifier.Identity("google-id", "other@example.test"), userId,
+        new AuthService.DeviceContext(null, null))).isInstanceOf(AppException.class);
+    assertThat(user.getGoogleSubject()).isNull();
   }
 
   @Test
@@ -142,7 +213,72 @@ class AuthServiceTest {
             Duration.ofDays(30)),
         new AppProperties.Tokens(Duration.ofHours(24), Duration.ofMinutes(30), 32),
         new AppProperties.Mail("LoveOS <test@loveos.invalid>", "console"),
-        "http://localhost:4000",
-        "talesoftwo://");
+        "http://localhost:4000");
+  }
+
+  @Test
+  void appleCreatesVerifiedRelayAccountWithoutPasswordOrVerificationEmail() {
+    var result = service.appleSignIn(new AppleTokenVerifier.Identity("apple-id", "qa@privaterelay.appleid.com"), null,
+        new AuthService.DeviceContext(null, null));
+    assertThat(result.user().email()).isEqualTo("qa@privaterelay.appleid.com");
+    assertThat(result.user().emailVerified()).isTrue();
+    var user = org.mockito.ArgumentCaptor.forClass(User.class);
+    verify(users).saveAndFlush(user.capture());
+    assertThat(user.getValue().getAppleSubject()).isEqualTo("apple-id");
+    assertThat(user.getValue().getPasswordHash()).isNull();
+    org.mockito.Mockito.verifyNoInteractions(mailer);
+  }
+
+  @Test
+  void returningAppleUserIsIdentifiedBySubjectNotChangedEmail() {
+    User user = new User();
+    user.setId(UUID.randomUUID());
+    user.setEmail("old@privaterelay.appleid.com");
+    user.setEmailVerified(true);
+    user.setAppleSubject("apple-id");
+    when(users.findByAppleSubject("apple-id")).thenReturn(Optional.of(user));
+    var result = service.appleSignIn(new AppleTokenVerifier.Identity("apple-id", "new@privaterelay.appleid.com"), null,
+        new AuthService.DeviceContext(null, null));
+    assertThat(result.user().userId()).isEqualTo(user.getId().toString());
+    org.mockito.Mockito.verify(users, org.mockito.Mockito.never()).saveAndFlush(any(User.class));
+  }
+
+  @Test
+  void appleDoesNotMergeAnExistingEmailWithoutExplicitLinking() {
+    when(users.existsByEmail("existing@example.test")).thenReturn(true);
+    assertThatThrownBy(() -> service.appleSignIn(new AppleTokenVerifier.Identity("apple-id", "existing@example.test"), null,
+        new AuthService.DeviceContext(null, null)))
+        .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.code()).isEqualTo(ErrorCode.ACCOUNT_CONFLICT));
+  }
+
+  @Test
+  void verifiedSignedInUserCanExplicitlyLinkARelayAddress() {
+    UUID userId = UUID.randomUUID();
+    User user = new User();
+    user.setId(userId);
+    user.setEmail("existing@example.test");
+    user.setEmailVerified(true);
+    user.setPasswordHash("keep-password");
+    when(users.findByIdForUpdate(userId)).thenReturn(Optional.of(user));
+    service.appleSignIn(new AppleTokenVerifier.Identity("apple-id", "qa@privaterelay.appleid.com"), userId,
+        new AuthService.DeviceContext(null, null));
+    assertThat(user.getAppleSubject()).isEqualTo("apple-id");
+    assertThat(user.getEmail()).isEqualTo("existing@example.test");
+    assertThat(user.getPasswordHash()).isEqualTo("keep-password");
+  }
+
+  @Test
+  void appleIdentityAlreadyOwnedByAnotherUserCannotBeLinked() {
+    UUID userId = UUID.randomUUID();
+    User current = new User();
+    current.setId(userId);
+    current.setEmailVerified(true);
+    User other = new User();
+    other.setId(UUID.randomUUID());
+    when(users.findByIdForUpdate(userId)).thenReturn(Optional.of(current));
+    when(users.findByAppleSubject("apple-id")).thenReturn(Optional.of(other));
+    assertThatThrownBy(() -> service.appleSignIn(new AppleTokenVerifier.Identity("apple-id", "qa@privaterelay.appleid.com"), userId,
+        new AuthService.DeviceContext(null, null))).isInstanceOf(AppException.class);
+    assertThat(current.getAppleSubject()).isNull();
   }
 }

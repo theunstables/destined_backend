@@ -110,6 +110,16 @@ spring:
 
 # ── Application settings — bound to AppProperties, validated at startup ───────
 loveos:
+  apple:
+    client-id: ${APPLE_CLIENT_ID:}
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    private-key-base64: ${APPLE_PRIVATE_KEY_BASE64:}
+    native-redirect-uri: ${APPLE_NATIVE_REDIRECT_URI:talesoftwo://apple-callback}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    native-redirect-uri: ${GOOGLE_NATIVE_REDIRECT_URI:talesoftwo://google-callback}
   jwt:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:loveos-api}
@@ -122,20 +132,26 @@ loveos:
   mail:
     from: ${MAIL_FROM:LoveOS <no-reply@loveos.app>}
     driver: ${MAIL_DRIVER:console}
+    resend-api-key: ${RESEND_API_KEY:}
+    frontend-url: ${FRONTEND_URL:}
   media:
     driver: ${MEDIA_DRIVER:local}
-    local-dir: ${MEDIA_LOCAL_DIR:${user.home}/.loveos/media}
+    local-dir: ${MEDIA_LOCAL_DIR:./uploads}
     max-bytes: ${MEDIA_MAX_BYTES:26214400}
+    github:
+      owner: ${MEDIA_GITHUB_OWNER:}
+      repository: ${MEDIA_GITHUB_REPOSITORY:}
+      branch: ${MEDIA_GITHUB_BRANCH:main}
+      token: ${MEDIA_GITHUB_TOKEN:}
     s3:
       bucket: ${MEDIA_S3_BUCKET:}
       region: ${MEDIA_S3_REGION:us-east-1}
       endpoint: ${MEDIA_S3_ENDPOINT:}
       public-base-url: ${MEDIA_S3_PUBLIC_BASE_URL:}
   public-api-url: ${PUBLIC_API_URL:http://localhost:4000}
-  public-app-url: ${PUBLIC_APP_URL:talesoftwo://}
   cors:
     # An allow-list, never a wildcard. Expo's dev server and the web build.
-    origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006,https://www.talesoftwo.world,https://destinedfrontend-xi.vercel.app}
+    origins: ${CORS_ORIGINS:http://localhost:8081,http://localhost:19006}
 
 logging:
   level:

@@ -28,14 +28,18 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
-  private static final Map<String, Policy> POLICIES = Map.of(
-      "/v1/auth/signup", new Policy(5, Duration.ofMinutes(15)),
-      "/v1/auth/login", new Policy(10, Duration.ofMinutes(15)),
-      "/v1/auth/password/forgot", new Policy(3, Duration.ofHours(1)),
-      "/v1/auth/verify-email/resend", new Policy(5, Duration.ofHours(1)),
-      "/v1/pairing/invites", new Policy(10, Duration.ofMinutes(15)),
-      "/v1/pairing/redeem", new Policy(10, Duration.ofMinutes(15)),
-      "/v1/pairing/confirm", new Policy(10, Duration.ofMinutes(15)));
+    private static final Map<String, Policy> POLICIES = Map.ofEntries(
+      Map.entry("/v1/auth/signup", new Policy(5, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/login", new Policy(10, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/google/start", new Policy(10, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/google/exchange", new Policy(20, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/apple/start", new Policy(10, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/apple/exchange", new Policy(20, Duration.ofMinutes(15))),
+      Map.entry("/v1/auth/password/forgot", new Policy(3, Duration.ofHours(1))),
+      Map.entry("/v1/auth/verify-email/resend", new Policy(5, Duration.ofHours(1))),
+      Map.entry("/v1/pairing/invites", new Policy(10, Duration.ofMinutes(15))),
+      Map.entry("/v1/pairing/redeem", new Policy(10, Duration.ofMinutes(15))),
+      Map.entry("/v1/pairing/confirm", new Policy(10, Duration.ofMinutes(15))));
 
   private final ObjectMapper objectMapper;
   private final Clock clock;

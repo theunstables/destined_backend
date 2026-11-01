@@ -20,20 +20,15 @@ public class S3StorageProvider implements StorageProvider {
 
   private final S3Client client;
   private final String bucket;
-  private final String publicBaseUrl;
 
   public S3StorageProvider(S3MediaProperties properties) {
     if (blank(properties.bucket())) throw new IllegalStateException("MEDIA_S3_BUCKET is required");
-    if (blank(properties.publicBaseUrl())) {
-      throw new IllegalStateException("MEDIA_S3_PUBLIC_BASE_URL is required");
-    }
     var builder = S3Client.builder().region(Region.of(properties.region()));
     if (!blank(properties.endpoint())) {
       builder.endpointOverride(URI.create(properties.endpoint())).forcePathStyle(true);
     }
     client = builder.build();
     bucket = properties.bucket();
-    publicBaseUrl = properties.publicBaseUrl().replaceAll("/+$", "");
   }
 
   @Override
@@ -53,11 +48,6 @@ public class S3StorageProvider implements StorageProvider {
     } catch (RuntimeException exception) {
       throw new IOException("S3 read failed", exception);
     }
-  }
-
-  @Override
-  public String publicUrl(String key, String fallback) {
-    return publicBaseUrl + "/" + key;
   }
 
   private static boolean blank(String value) {
