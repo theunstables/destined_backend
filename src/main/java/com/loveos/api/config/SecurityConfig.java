@@ -236,11 +236,19 @@ public class SecurityConfig {
     }
 
     private static String validatedOrigin(String value) {
-      if (value.contains("*")) {
+      String trimmed = value == null ? null : value.trim();
+      if (trimmed == null || trimmed.isEmpty()) {
+        throw new IllegalArgumentException("Invalid CORS origin: " + value);
+      }
+      if (trimmed.contains("*")) {
         throw new IllegalArgumentException("CORS origins must not contain wildcards");
       }
+      String normalized = trimmed;
+      while (normalized.endsWith("/")) {
+        normalized = normalized.substring(0, normalized.length() - 1);
+      }
       try {
-        URI uri = URI.create(value);
+        URI uri = URI.create(normalized);
         String scheme = uri.getScheme();
         String host = uri.getHost();
         boolean localHttp = "http".equalsIgnoreCase(scheme)
@@ -253,14 +261,14 @@ public class SecurityConfig {
         if (!validScheme || host == null || !exactOrigin) {
           throw new IllegalArgumentException(
               "CORS origin must be an exact HTTPS origin (HTTP is allowed only for localhost): "
-                  + value);
+                  + trimmed);
         }
-        return value;
+        return normalized;
       } catch (IllegalArgumentException exception) {
         if (exception.getMessage() != null && exception.getMessage().startsWith("CORS origin")) {
           throw exception;
         }
-        throw new IllegalArgumentException("Invalid CORS origin: " + value, exception);
+        throw new IllegalArgumentException("Invalid CORS origin: " + trimmed, exception);
       }
     }
   }

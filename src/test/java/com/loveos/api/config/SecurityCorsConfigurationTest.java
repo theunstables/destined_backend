@@ -32,6 +32,16 @@ class SecurityCorsConfigurationTest {
   }
 
   @Test
+  void stripsTrailingSlashFromConfiguredOrigins() {
+    assertThat(new SecurityConfig.CorsProperties(List.of(
+        "https://www.talesoftwo.world/",
+        "https://destinedfrontend-xi.vercel.app/")).origins())
+        .containsExactly(
+            "https://www.talesoftwo.world",
+            "https://destinedfrontend-xi.vercel.app");
+  }
+
+  @Test
   void rejectsWildcardsPathsAndInsecureRemoteOrigins() {
     assertThatThrownBy(() -> new SecurityConfig.CorsProperties(List.of("https://*.vercel.app")))
         .isInstanceOf(IllegalArgumentException.class);
