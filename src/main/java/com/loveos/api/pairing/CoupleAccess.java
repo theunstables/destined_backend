@@ -1,5 +1,6 @@
 package com.loveos.api.pairing;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import java.util.List;
 
@@ -33,7 +34,7 @@ public interface CoupleAccess {
     }
   }
 
-  record Member(UUID userId, Role role, String displayName, String nickname) {}
+  record Member(UUID userId, Role role, String displayName, String nickname, LocalDate birthday) {}
 
   record Space(String name, String shortName, String coverStyle) {}
 }
